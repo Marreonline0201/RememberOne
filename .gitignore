@@ -1,0 +1,12 @@
+/.claude
+/.env
+/.env.example
+/.env.local
+/Prompt.txt
+/SETUP.md
+/SPEC.md
+/supabase
+node_modules
+.next
+android
+ios
