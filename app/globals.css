@@ -97,6 +97,19 @@
   }
 }
 
+/*
+  Remove browser-default blue underline + disclosure triangle from <summary>.
+  Some browsers (Chrome, Safari) render <summary> with blue link-like styling.
+  We apply our own styles at the component level, so strip the UA defaults here.
+*/
+summary {
+  text-decoration: none;
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+
 /* Prevent bounce/overscroll on iOS while keeping scrolling inside containers */
 html {
   overflow-x: hidden;

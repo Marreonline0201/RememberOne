@@ -9,11 +9,27 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Calendar, MapPin } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Mic } from "lucide-react";
 import Link from "next/link";
-import { formatDate, getInitials } from "@/lib/utils";
+import { formatDate, formatRelativeDate, getInitials } from "@/lib/utils";
 import { DeletePersonButton } from "@/components/DeletePersonButton";
 import { AddNotesInput } from "@/components/AddNotesInput";
+
+const PROFILE_PALETTES = [
+  { strip: "from-blue-400 to-blue-600",    avatar: "bg-blue-100 text-blue-700",    ring: "ring-blue-300" },
+  { strip: "from-violet-400 to-purple-600",avatar: "bg-violet-100 text-violet-700",ring: "ring-violet-300" },
+  { strip: "from-emerald-400 to-teal-500", avatar: "bg-emerald-100 text-emerald-700",ring: "ring-emerald-300" },
+  { strip: "from-orange-400 to-amber-500", avatar: "bg-orange-100 text-orange-700",ring: "ring-orange-300" },
+  { strip: "from-pink-400 to-rose-500",    avatar: "bg-pink-100 text-pink-700",    ring: "ring-pink-300" },
+  { strip: "from-teal-400 to-cyan-500",    avatar: "bg-teal-100 text-teal-700",    ring: "ring-teal-300" },
+  { strip: "from-indigo-400 to-blue-500",  avatar: "bg-indigo-100 text-indigo-700",ring: "ring-indigo-300" },
+  { strip: "from-fuchsia-400 to-pink-500", avatar: "bg-fuchsia-100 text-fuchsia-700",ring: "ring-fuchsia-300" },
+];
+function getProfilePalette(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return PROFILE_PALETTES[Math.abs(hash) % PROFILE_PALETTES.length];
+}
 
 interface Props {
   params: { id: string };
@@ -37,6 +53,8 @@ export default async function PersonPage({ params }: Props) {
 
   if (!person) notFound();
 
+  const palette = getProfilePalette(person.name);
+
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6">
       {/* Back navigation — desktop only; bottom tab bar serves mobile */}
@@ -54,31 +72,40 @@ export default async function PersonPage({ params }: Props) {
 
       {/* ── Person header ─────────────────────────────────────────────── */}
       <div className="flex items-start gap-4">
-        <Avatar className="w-14 h-14 md:w-16 md:h-16 text-lg shrink-0">
-          <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-lg">
+        <Avatar className={`w-20 h-20 md:w-24 md:h-24 shrink-0 ring-4 ring-offset-2 ${palette.ring}`}>
+          <AvatarFallback className={`font-bold text-2xl md:text-3xl ${palette.avatar}`}>
             {getInitials(person.name)}
           </AvatarFallback>
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-gray-900 md:text-2xl leading-tight">
-            {person.name}
-          </h1>
-          {person.meetings.length > 0 && (
-            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-              {person.meetings[0].summary}
-            </p>
-          )}
-          {/* Meeting badges — wrap naturally, no overflow */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl font-extrabold text-gray-900 md:text-2xl leading-tight">
+              {person.name}
+            </h1>
+            {person.meetings.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">
+                <Calendar className="w-3 h-3" />
+                {person.meetings.length} {person.meetings.length === 1 ? "meeting" : "meetings"}
+              </span>
+            )}
+          </div>
+          {(() => {
+            const jobAttr = person.attributes.find((a) =>
+              ["job title", "company", "occupation", "role", "title"].includes(
+                a.key.toLowerCase()
+              )
+            );
+            const subtitle = jobAttr?.value ?? (person.meetings[0]?.summary || null);
+            return subtitle ? (
+              <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{subtitle}</p>
+            ) : null;
+          })()}
           <div className="flex flex-wrap gap-2 mt-2">
             {person.meetings.map((m) => (
-              <Badge
-                key={m.id}
-                variant="secondary"
-                className="text-xs gap-1 py-1"
-              >
+              <Badge key={m.id} variant="secondary" className="text-xs gap-1 py-1">
                 <Calendar className="w-3 h-3" />
-                {formatDate(m.meeting_date)}
+                <span title={formatDate(m.meeting_date)}>{formatRelativeDate(m.meeting_date)}</span>
                 {m.location && (
                   <>
                     <MapPin className="w-3 h-3 ml-0.5" />
@@ -90,11 +117,18 @@ export default async function PersonPage({ params }: Props) {
           </div>
         </div>
 
-        {/* Delete — always visible but small */}
         <div className="shrink-0">
           <DeletePersonButton personId={person.id} personName={person.name} />
         </div>
       </div>
+
+      {/* ── Log another meeting shortcut ──────────────────────────────── */}
+      <Button asChild variant="outline" className="w-full h-11 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 font-semibold">
+        <Link href={`/meet?person=${encodeURIComponent(person.name)}`}>
+          <Mic className="w-4 h-4" />
+          Log another meeting with {person.name.split(" ")[0]}
+        </Link>
+      </Button>
 
       <Separator />
 
@@ -154,7 +188,7 @@ export default async function PersonPage({ params }: Props) {
                 >
                   <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
                     <Calendar className="w-3.5 h-3.5 shrink-0" />
-                    <span>{formatDate(m.meeting_date)}</span>
+                    <span title={formatDate(m.meeting_date)}>{formatRelativeDate(m.meeting_date)}</span>
                     {m.location && (
                       <>
                         <MapPin className="w-3.5 h-3.5 shrink-0 ml-1" />
@@ -166,7 +200,7 @@ export default async function PersonPage({ params }: Props) {
                     <p className="text-gray-700 leading-relaxed">{m.summary}</p>
                   )}
                   <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-gray-600 select-none">
+                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-gray-600 select-none list-none [&::-webkit-details-marker]:hidden no-underline decoration-transparent">
                       View original notes
                     </summary>
                     <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">

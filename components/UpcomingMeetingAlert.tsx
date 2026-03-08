@@ -12,11 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bell, Calendar, Clock, ChevronRight, X } from "lucide-react";
 import { formatDate, formatTime, getInitials } from "@/lib/utils";
-import type { UpcomingMeetingAlert as AlertType } from "@/types/app";
-import type { Person } from "@/types/database";
+import type { UpcomingMeetingAlert as AlertType, PersonFull } from "@/types/app";
 
 interface Props {
-  people: Person[];
+  // Used by the parent to decide whether to render this component at all.
+  // Typed as PersonFull[] to match what getAllPeopleFull returns.
+  people: PersonFull[];
 }
 
 export function UpcomingMeetingAlert({ people }: Props) {
