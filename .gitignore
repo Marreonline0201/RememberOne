@@ -10,3 +10,5 @@ node_modules
 .next
 android
 ios
+/screenshots
+/screenshot.mjs
