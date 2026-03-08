@@ -1,10 +1,12 @@
 "use client";
 
-// DashboardNav — top navigation bar with logo, nav links, and user menu
+// DashboardNav — dual-mode navigation.
+// Mobile (< md): sticky bottom tab bar with three tabs.
+// Desktop (md+): sticky top horizontal bar with logo, links, user menu.
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Brain, UserPlus, LogOut, Loader2 } from "lucide-react";
+import { Brain, UserPlus, LogOut, Loader2, LayoutGrid, Plus, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
@@ -35,11 +37,15 @@ export function DashboardNav({ user }: Props) {
     router.refresh();
   }
 
-  return (
-    <header className="border-b bg-white sticky top-0 z-40 safe-top">
+  // ── DESKTOP TOP NAV (md and above) ──────────────────────────────────────
+  const desktopNav = (
+    <header className="hidden md:block border-b bg-white sticky top-0 z-40 safe-top">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-gray-900 shrink-0">
+        <Link
+          href="/"
+          className="flex items-center gap-2 font-bold text-gray-900 shrink-0"
+        >
           <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
             <Brain className="w-4 h-4 text-primary-foreground" />
           </div>
@@ -73,7 +79,7 @@ export function DashboardNav({ user }: Props) {
         <div className="flex-1" />
 
         {/* Quick action button */}
-        <Button size="sm" asChild className="hidden sm:flex gap-1.5">
+        <Button size="sm" asChild className="gap-1.5">
           <Link href="/meet">
             <UserPlus className="w-3.5 h-3.5" />
             Log meeting
@@ -85,6 +91,7 @@ export function DashboardNav({ user }: Props) {
           <button
             onClick={() => setMenuOpen((v) => !v)}
             className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Open user menu"
           >
             <Avatar className="w-8 h-8">
               <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
@@ -95,16 +102,16 @@ export function DashboardNav({ user }: Props) {
 
           {menuOpen && (
             <>
-              {/* Backdrop */}
               <div
                 className="fixed inset-0 z-40"
                 onClick={() => setMenuOpen(false)}
               />
-              {/* Dropdown */}
               <div className="absolute right-0 top-10 z-50 w-52 rounded-lg border bg-white shadow-lg py-1">
                 <div className="px-3 py-2 border-b">
                   <p className="text-sm font-medium truncate">{displayName}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {user.email}
+                  </p>
                 </div>
                 <button
                   onClick={handleSignOut}
@@ -124,5 +131,103 @@ export function DashboardNav({ user }: Props) {
         </div>
       </div>
     </header>
+  );
+
+  // ── MOBILE BOTTOM TAB BAR (below md) ────────────────────────────────────
+  // Tabs: Home (People grid), Meet (Log meeting), Account (sign out)
+  const mobileNav = (
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t mobile-nav-safe">
+      <div className="flex items-stretch h-16">
+        {/* People tab */}
+        <Link
+          href="/"
+          className={`flex flex-col items-center justify-center flex-1 gap-1 text-[11px] font-medium transition-colors ${
+            pathname === "/"
+              ? "text-primary"
+              : "text-muted-foreground"
+          }`}
+        >
+          <LayoutGrid
+            className={`w-5 h-5 ${pathname === "/" ? "text-primary" : "text-muted-foreground"}`}
+          />
+          People
+        </Link>
+
+        {/* Log meeting tab — prominent center button */}
+        <Link
+          href="/meet"
+          className="flex flex-col items-center justify-center flex-1 gap-1 text-[11px] font-medium transition-colors"
+          aria-label="Log a meeting"
+        >
+          <div
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+              pathname === "/meet"
+                ? "bg-primary text-primary-foreground"
+                : "bg-primary/10 text-primary"
+            }`}
+          >
+            <Plus className="w-5 h-5" />
+          </div>
+          <span
+            className={pathname === "/meet" ? "text-primary" : "text-muted-foreground"}
+          >
+            Log
+          </span>
+        </Link>
+
+        {/* Account tab */}
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          className={`flex flex-col items-center justify-center flex-1 gap-1 text-[11px] font-medium transition-colors ${
+            menuOpen ? "text-primary" : "text-muted-foreground"
+          }`}
+          aria-label="Open account menu"
+        >
+          <User className="w-5 h-5" />
+          Account
+        </button>
+      </div>
+
+      {/* Account sheet — slides up from bottom on mobile */}
+      {menuOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={() => setMenuOpen(false)}
+          />
+          <div className="fixed bottom-0 inset-x-0 z-50 bg-white rounded-t-2xl shadow-xl safe-bottom">
+            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1" />
+            <div className="px-5 py-4 border-b">
+              <p className="text-sm font-semibold text-gray-900 truncate">
+                {displayName}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            </div>
+            <div className="px-5 py-3">
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="flex items-center gap-3 w-full py-3 text-sm text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {signingOut ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                ) : (
+                  <LogOut className="w-5 h-5 text-muted-foreground" />
+                )}
+                {signingOut ? "Signing out..." : "Sign out"}
+              </button>
+            </div>
+            <div className="h-2" />
+          </div>
+        </>
+      )}
+    </nav>
+  );
+
+  return (
+    <>
+      {desktopNav}
+      {mobileNav}
+    </>
   );
 }

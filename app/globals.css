@@ -85,3 +85,24 @@
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-left   { padding-left:   env(safe-area-inset-left); }
 .safe-right  { padding-right:  env(safe-area-inset-right); }
+
+/*
+  Mobile bottom tab bar extends to fill the device safe area so content
+  is never hidden behind the home indicator on iOS or gesture bar on Android.
+  The `safe-bottom` class adds padding-bottom ON TOP of the base h-16.
+*/
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-nav-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Prevent bounce/overscroll on iOS while keeping scrolling inside containers */
+html {
+  overflow-x: hidden;
+}
+
+/* Ensure no element creates unintended horizontal overflow on 375px */
+body {
+  overflow-x: hidden;
+}

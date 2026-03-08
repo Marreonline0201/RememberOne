@@ -1,7 +1,7 @@
 "use client";
 
 // FamilyMemberCard — displays one family member with their relation and attributes.
-// Includes a delete button that calls DELETE /api/people/[personId]/family/[fmId].
+// Mobile-first: larger touch targets, confirm-delete flow.
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -48,16 +48,16 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
   async function handleDelete() {
     if (!confirmDelete) {
       setConfirmDelete(true);
-      // Auto-reset confirm after 3s if user doesn't confirm
       setTimeout(() => setConfirmDelete(false), 3000);
       return;
     }
 
     setDeleting(true);
     try {
-      const res = await fetch(`/api/people/${personId}/family/${familyMember.id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/people/${personId}/family/${familyMember.id}`,
+        { method: "DELETE" }
+      );
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Delete failed");
 
@@ -66,7 +66,8 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
     } catch (err: unknown) {
       toast({
         title: "Failed to delete",
-        description: err instanceof Error ? err.message : "Something went wrong",
+        description:
+          err instanceof Error ? err.message : "Something went wrong",
         variant: "destructive",
       });
       setDeleting(false);
@@ -77,55 +78,76 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 space-y-3">
-        {/* Header */}
+        {/* Header row */}
         <div className="flex items-center gap-3">
-          <Avatar className="w-9 h-9 shrink-0">
+          {/* Avatar — slightly larger for readability on small screens */}
+          <Avatar className="w-10 h-10 shrink-0">
             <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
               {getInitials(familyMember.name)}
             </AvatarFallback>
           </Avatar>
+
           <div className="min-w-0 flex-1">
             <p className="font-medium text-sm text-gray-900 truncate">
               {familyMember.name}
             </p>
-            <Badge variant="outline" className="text-xs mt-0.5">
+            <Badge
+              variant="outline"
+              className={`text-xs mt-0.5 border-0 py-0.5 ${avatarColor}`}
+            >
               {capitalize(familyMember.relation)}
             </Badge>
           </div>
+
+          {/* Delete — 44px touch target */}
           <Button
             type="button"
             variant={confirmDelete ? "destructive" : "ghost"}
             size="icon"
-            className="h-7 w-7 shrink-0"
+            className="h-11 w-11 shrink-0"
             onClick={handleDelete}
             disabled={deleting}
-            title={confirmDelete ? "Click again to confirm delete" : "Delete family member"}
+            title={
+              confirmDelete
+                ? "Tap again to confirm delete"
+                : "Delete family member"
+            }
+            aria-label={
+              confirmDelete
+                ? "Tap again to confirm delete"
+                : "Delete family member"
+            }
           >
             {deleting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             )}
           </Button>
         </div>
 
+        {/* Confirm delete hint */}
         {confirmDelete && !deleting && (
-          <p className="text-xs text-destructive">
-            Click the trash icon again to confirm deletion.
+          <p className="text-xs text-destructive font-medium">
+            Tap the trash icon again to confirm deletion.
           </p>
         )}
 
         {/* Notes */}
         {familyMember.notes && (
-          <p className="text-xs text-muted-foreground">{familyMember.notes}</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {familyMember.notes}
+          </p>
         )}
 
         {/* Attributes */}
         {familyMember.attributes.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {familyMember.attributes.map((attr) => (
               <div key={attr.id} className="flex gap-2 text-xs">
-                <span className="text-muted-foreground shrink-0">{attr.key}:</span>
+                <span className="text-muted-foreground shrink-0">
+                  {attr.key}:
+                </span>
                 <span className="text-gray-800">{attr.value}</span>
               </div>
             ))}
