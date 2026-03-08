@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,8 +30,52 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  useEffect(() => {
+    // On native: listen for the deep link callback after Google OAuth
+    let cleanup: (() => void) | undefined;
+    import("@capacitor/core").then(({ Capacitor }) => {
+      if (!Capacitor.isNativePlatform()) return;
+      import("@capacitor/app").then(({ App }) => {
+        const handle = App.addListener("appUrlOpen", async ({ url }) => {
+          if (!url.startsWith("com.rememberone.app://")) return;
+          const urlObj = new URL(url.replace("com.rememberone.app://", "https://placeholder/"));
+          const code = urlObj.searchParams.get("code");
+          if (code) {
+            await supabase.auth.exchangeCodeForSession(code);
+            router.push("/");
+            router.refresh();
+          }
+        });
+        cleanup = () => handle.then((h) => h.remove());
+      });
+    });
+    return () => cleanup?.();
+  }, [router, supabase]);
+
   async function handleGoogleSignIn() {
     setGoogleLoading(true);
+    try {
+      const { Capacitor } = await import("@capacitor/core");
+      if (Capacitor.isNativePlatform()) {
+        // Native: open in system browser to avoid Google's WebView block
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: "com.rememberone.app://login-callback",
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error) throw error;
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: data.url! });
+        setGoogleLoading(false);
+        return;
+      }
+    } catch {
+      // Not native or import failed — fall through to web flow
+    }
+
+    // Web flow
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
