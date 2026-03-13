@@ -1,38 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Hammersmith+One&family=Instrument+Sans:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* Figma design colors — RememberOne */
+    --background: 273 100% 98%;     /* #fbf6ff — lavender white page bg */
     --foreground: 222.2 84% 4.9%;
 
-    --card: 0 0% 100%;
+    --card: 0 0% 100%;              /* white cards pop against lavender bg */
     --card-foreground: 222.2 84% 4.9%;
 
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 261 47% 33%;         /* #482d7c — dark purple (nav bar end) */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 260 100% 90%;      /* #dccaff — light lavender */
+    --secondary-foreground: 261 47% 20%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 260 60% 95%;
+    --muted-foreground: 261 20% 50%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 197 100% 91%;         /* #d0f2ff — light cyan-blue */
+    --accent-foreground: 209 48% 20%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --border: 260 50% 90%;          /* light lavender border */
+    --input: 260 50% 90%;
+    --ring: 261 47% 33%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   .dark {

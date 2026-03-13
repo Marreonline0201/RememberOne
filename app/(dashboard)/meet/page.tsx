@@ -41,27 +41,14 @@ export default function MeetPage() {
         </p>
       </div>
 
-      {/* Example hint — collapsible feel via details on mobile */}
-      <details className="group rounded-xl border border-dashed border-gray-300 bg-gray-50 overflow-hidden">
-        <summary className="flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer select-none list-none">
-          <span>See an example</span>
-          <svg
-            className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </summary>
-        <div className="px-4 pb-4 text-sm text-muted-foreground leading-relaxed">
-          &quot;Today I met Eric at the conference. He&apos;s a software engineer at
-          Google, went to Stony Brook University. He has a son named Mike who
-          also attends Stony Brook, and a daughter named Sophia who&apos;s 8 years
-          old. Eric loves golf and his wife is named Karen.&quot;
-        </div>
-      </details>
+      {/* Example hint */}
+      <div className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed" style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}>
+        <span className="font-medium text-black mr-1">Example:</span>
+        &quot;Today I met Eric at the conference. He&apos;s a software engineer at
+        Google, went to Stony Brook University. He has a son named Mike who
+        also attends Stony Brook, and a daughter named Sophia who&apos;s 8 years
+        old. Eric loves golf and his wife is named Karen.&quot;
+      </div>
 
       {/* Main input component */}
       <ConversationInput />

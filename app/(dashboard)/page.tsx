@@ -60,8 +60,8 @@ export default async function DashboardPage() {
       {/* People list */}
       {people.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-5 shadow-inner">
-            <Users className="w-12 h-12 text-blue-500" />
+          <div className="w-24 h-24 rounded-3xl flex items-center justify-center mb-5 shadow-inner" style={{ background: "linear-gradient(to bottom right, #d0f2ff, #dccaff)" }}>
+            <Users className="w-12 h-12" style={{ color: "#482d7c" }} />
           </div>
           <h2 className="text-2xl font-extrabold text-gray-900 mb-2">
             No one here yet

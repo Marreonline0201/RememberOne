@@ -1,13 +1,12 @@
 "use client";
 
-// ConversationInput — main text area where the user describes who they met.
-// Mobile-first: large touch target mic button, full-height textarea, sticky submit bar.
-// Sends the text to /api/ai/extract, shows a preview, then redirects to profile.
+// ConversationInput — voice-only input where the user describes who they met.
+// Sends the transcript to /api/ai/extract, shows a preview, then redirects to profile.
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+// Textarea removed — voice-only input
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
@@ -19,17 +18,12 @@ import {
   Mic,
   MicOff,
   CheckCircle2,
+  X,
 } from "lucide-react";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { capitalize } from "@/lib/utils";
 
 type Step = "input" | "loading" | "success" | "preview";
-
-const PROMPT_CHIPS = [
-  "Who did you meet?",
-  "Where did you meet?",
-  "What did they tell you about themselves?",
-];
 
 interface ExtractionPreview {
   extraction: AIExtractionResult;
@@ -43,17 +37,9 @@ export function ConversationInput() {
   const [step, setStep] = useState<Step>("input");
   const isLoading = step === "loading";
   const [text, setText] = useState("");
-  const [focused, setFocused] = useState(false);
   const [preview, setPreview] = useState<ExtractionPreview | null>(null);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-
-  function appendPrompt(chip: string) {
-    setText((prev) => {
-      const base = prev.trimEnd();
-      return base ? `${base} ${chip} ` : `${chip} `;
-    });
-  }
 
   useEffect(() => {
     return () => {
@@ -161,9 +147,9 @@ export function ConversationInput() {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-6">
         <div className="relative flex items-center justify-center">
-          <span className="absolute w-20 h-20 rounded-full bg-blue-200 opacity-40 animate-ping" />
-          <span className="absolute w-14 h-14 rounded-full bg-blue-300 opacity-30 animate-ping" style={{ animationDelay: "150ms" }} />
-          <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+          <span className="absolute w-20 h-20 rounded-full opacity-20 animate-ping" style={{ backgroundColor: "#dccaff" }} />
+          <span className="absolute w-14 h-14 rounded-full opacity-20 animate-ping" style={{ backgroundColor: "#d0f2ff", animationDelay: "150ms" }} />
+          <div className="relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style={{ background: "linear-gradient(to bottom right, #284e72, #482d7c)" }}>
             <Sparkles className="w-8 h-8 text-white" />
           </div>
         </div>
@@ -171,14 +157,14 @@ export function ConversationInput() {
           <p className="font-bold text-gray-900 text-lg">Reading your notes...</p>
           <p className="text-sm text-muted-foreground">AI is extracting people and details.</p>
           <div className="flex flex-col gap-2 w-48 mx-auto">
-            <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full animate-pulse w-3/4" />
+            <div className="h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: "#f0e8ff" }}>
+              <div className="h-full rounded-full animate-pulse w-3/4" style={{ background: "linear-gradient(to right, #d0f2ff, #dccaff)" }} />
             </div>
-            <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-300 to-blue-500 rounded-full animate-pulse w-1/2" style={{ animationDelay: "200ms" }} />
+            <div className="h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: "#f0e8ff" }}>
+              <div className="h-full rounded-full animate-pulse w-1/2" style={{ background: "linear-gradient(to right, #dccaff, #482d7c)", animationDelay: "200ms" }} />
             </div>
-            <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-200 to-blue-400 rounded-full animate-pulse w-2/3" style={{ animationDelay: "400ms" }} />
+            <div className="h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: "#f0e8ff" }}>
+              <div className="h-full rounded-full animate-pulse w-2/3" style={{ background: "linear-gradient(to right, #d0f2ff, #284e72)", animationDelay: "400ms" }} />
             </div>
           </div>
         </div>
@@ -325,88 +311,66 @@ export function ConversationInput() {
   }
 
   // ── INPUT STATE ────────────────────────────────────────────────────────
-  const charPct = Math.min((text.length / 4000) * 100, 100);
-  const barColor = charPct > 90 ? "bg-red-500" : charPct > 70 ? "bg-amber-400" : "bg-blue-500";
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Textarea wrapper with focus glow */}
-      <div className={`relative rounded-xl transition-shadow duration-200 ${
-        focused ? "shadow-[0_0_0_3px_rgba(59,130,246,0.15)] ring-1 ring-blue-400" : ""
-      }`}>
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value.slice(0, 4000))}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder="Today I met Sarah at the networking event. She's a product manager at Stripe, went to NYU. She mentioned her husband John is a doctor and their daughter Emma is 5..."
-          className="min-h-[220px] md:min-h-[340px] text-base leading-relaxed resize-none pr-14 rounded-xl border-gray-200 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-400"
-          autoFocus
-          disabled={isLoading}
-          maxLength={4000}
-        />
-
-        {/* Mic button */}
-        <button
-          type="button"
-          onClick={toggleVoice}
-          disabled={isLoading}
-          title={listening ? "Stop recording" : "Start voice input"}
-          aria-label={listening ? "Stop recording" : "Start voice input"}
-          className={`absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
-            listening
-              ? "bg-red-100 text-red-600 hover:bg-red-200 animate-pulse"
-              : "bg-muted text-muted-foreground hover:bg-muted/80"
-          }`}
-        >
-          {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-        </button>
-      </div>
-
-      {/* Prompt chips */}
-      <div className="flex flex-wrap gap-2">
-        {PROMPT_CHIPS.map((chip) => (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Big mic button */}
+      <div className="flex flex-col items-center gap-4 py-6">
+        <div className="relative flex items-center justify-center">
+          {listening && (
+            <>
+              <span className="absolute w-28 h-28 rounded-full opacity-20 animate-ping" style={{ backgroundColor: "#482d7c" }} />
+              <span className="absolute w-20 h-20 rounded-full opacity-20 animate-ping" style={{ backgroundColor: "#284e72", animationDelay: "150ms" }} />
+            </>
+          )}
           <button
-            key={chip}
             type="button"
-            onClick={() => appendPrompt(chip)}
-            className="text-xs px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+            onClick={toggleVoice}
+            disabled={isLoading}
+            title={listening ? "Stop recording" : "Tap to speak"}
+            aria-label={listening ? "Stop recording" : "Tap to speak"}
+            className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 focus:outline-none"
+            style={{ background: listening ? "linear-gradient(to bottom right, #c0392b, #e74c3c)" : "linear-gradient(to bottom right, #284e72, #482d7c)" }}
           >
-            {chip}
+            {listening ? <MicOff className="w-10 h-10 text-white" /> : <Mic className="w-10 h-10 text-white" />}
           </button>
-        ))}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {listening ? (
+            <span className="flex items-center gap-1.5 text-red-600 font-medium">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
+              Listening... tap mic to stop
+            </span>
+          ) : text ? "Tap mic to continue speaking" : "Tap the mic and start speaking"}
+        </p>
       </div>
 
-      {/* Listening indicator */}
-      {listening && (
-        <p className="text-xs text-red-600 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
-          Listening... speak now. Tap the mic to stop.
-        </p>
+      {/* Transcript display */}
+      {text && (
+        <div className="relative rounded-xl border p-4" style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}>
+          <p className="text-sm leading-relaxed text-gray-800 pr-8">{text}</p>
+          <button
+            type="button"
+            onClick={() => setText("")}
+            aria-label="Clear transcript"
+            className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-gray-700 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
 
-      {/* Progress bar + submit */}
-      <div className="space-y-2">
-        <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-            style={{ width: `${charPct}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <p className={`text-xs ${text.length >= 3800 ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
-            {text.length}/4000
-          </p>
-          <Button
-            type="submit"
-            disabled={!text.trim() || isLoading}
-            className="h-11 gap-2 flex-1 md:flex-none font-semibold"
-          >
-            <Sparkles className="w-4 h-4" />
-            Extract &amp; Save
-          </Button>
-        </div>
-      </div>
+      {/* Submit */}
+      {text.trim() && (
+        <Button
+          type="submit"
+          disabled={isLoading}
+          className="w-full h-12 gap-2 font-semibold text-white border-0"
+          style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
+        >
+          <Sparkles className="w-4 h-4" />
+          Extract &amp; Save
+        </Button>
+      )}
     </form>
   );
 }
