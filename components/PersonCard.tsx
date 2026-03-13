@@ -22,16 +22,16 @@ interface Props {
   person: PersonFull;
 }
 
-// [gradient strip, avatar bg+text, ring color]
+// [gradient strip (Figma blue→purple palette), avatar bg+text, ring color]
 const PALETTES = [
-  ["from-blue-400 to-blue-600",    "bg-blue-100 text-blue-700",    "ring-blue-300"],
-  ["from-violet-400 to-purple-600","bg-violet-100 text-violet-700","ring-violet-300"],
-  ["from-emerald-400 to-teal-500", "bg-emerald-100 text-emerald-700","ring-emerald-300"],
-  ["from-orange-400 to-amber-500", "bg-orange-100 text-orange-700","ring-orange-300"],
-  ["from-pink-400 to-rose-500",    "bg-pink-100 text-pink-700",    "ring-pink-300"],
-  ["from-teal-400 to-cyan-500",    "bg-teal-100 text-teal-700",    "ring-teal-300"],
-  ["from-indigo-400 to-blue-500",  "bg-indigo-100 text-indigo-700","ring-indigo-300"],
-  ["from-fuchsia-400 to-pink-500", "bg-fuchsia-100 text-fuchsia-700","ring-fuchsia-300"],
+  ["from-[#d0f2ff] to-[#dccaff]", "bg-[#d0f2ff] text-[#482d7c]",  "ring-[#dccaff]"],
+  ["from-[#284e72] to-[#482d7c]", "bg-[#dccaff] text-[#482d7c]",  "ring-[#482d7c]"],
+  ["from-[#ddf6ff] to-[#d0f2ff]", "bg-[#ddf6ff] text-[#284e72]",  "ring-[#d0f2ff]"],
+  ["from-[#482d7c] to-[#284e72]", "bg-[#dccaff] text-[#284e72]",  "ring-[#284e72]"],
+  ["from-[#d0f2ff] to-[#dccaff]", "bg-[#fbf6ff] text-[#482d7c]",  "ring-[#dccaff]"],
+  ["from-[#284e72] to-[#482d7c]", "bg-[#ddf6ff] text-[#284e72]",  "ring-[#284e72]"],
+  ["from-[#dccaff] to-[#d0f2ff]", "bg-[#dccaff] text-[#482d7c]",  "ring-[#dccaff]"],
+  ["from-[#482d7c] to-[#284e72]", "bg-[#d0f2ff] text-[#284e72]",  "ring-[#482d7c]"],
 ] as const;
 
 function getNameIndex(name: string): number {
@@ -77,42 +77,40 @@ export function PersonCard({ person }: Props) {
     null;
 
   return (
-    <div className="group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg rounded-xl">
-      <Card className="overflow-hidden rounded-xl border border-gray-100 shadow-sm">
-        {/* ── Colored gradient strip ─────────────────────────────────── */}
-        <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
+    <div className="group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg" style={{ borderRadius: "10px 2px 10px 2px" }}>
+      <Card className="overflow-hidden border-0 shadow-sm" style={{ borderRadius: "10px 2px 10px 2px", backgroundImage: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)" }}>
 
         <CardContent className="p-0">
           {/* ── Header ───────────────────────────────────────────────── */}
           <div className="flex items-start gap-3 p-4 pb-3">
-            <Avatar className={`w-12 h-12 shrink-0 mt-0.5 ring-2 ring-offset-1 ${ringColor}`}>
+            <Avatar className={`w-12 h-12 shrink-0 mt-0.5 ring-2 ring-offset-1 ring-white/60`}>
               {person.avatar_url && (
                 <AvatarImage src={person.avatar_url} alt={person.name} />
               )}
-              <AvatarFallback className={`font-bold text-sm ${avatarColor}`}>
+              <AvatarFallback className="font-bold text-sm bg-white/70 text-[#284e72]">
                 {getInitials(person.name)}
               </AvatarFallback>
             </Avatar>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold text-gray-900 text-base leading-tight">
+                <p className="font-semibold text-[#1a2a3a] text-base leading-tight">
                   {person.name}
                 </p>
                 {/* Meeting count badge */}
                 {person.meetings.length > 0 && (
-                  <span className="shrink-0 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 whitespace-nowrap">
+                  <span className="shrink-0 text-xs font-semibold rounded-full px-2 py-0.5 whitespace-nowrap bg-white/60 text-[#482d7c]">
                     {person.meetings.length} {person.meetings.length === 1 ? "meet" : "meets"}
                   </span>
                 )}
               </div>
               {subtitle && (
-                <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                <p className="text-sm mt-0.5 truncate text-[#284e72]/80">
                   {subtitle}
                 </p>
               )}
               {lastMeeting && (
-                <div className="flex items-center gap-1.5 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                <div className="flex items-center gap-1.5 mt-1.5 text-xs text-[#284e72]/70 flex-wrap">
                   <Calendar className="w-3 h-3 shrink-0" />
                   <span>Last met {formatRelativeDate(lastMeeting.meeting_date)}</span>
                   {lastMeeting.location && (
@@ -133,7 +131,7 @@ export function PersonCard({ person }: Props) {
               asChild
               size="sm"
               variant="ghost"
-              className="shrink-0 h-9 w-9 p-0 text-muted-foreground hover:text-gray-900"
+              className="shrink-0 h-9 w-9 p-0 text-[#284e72]/60 hover:text-[#284e72] hover:bg-white/30"
             >
               <Link href={`/people/${person.id}`}>
                 <ChevronRight className="w-4 h-4" />
@@ -144,16 +142,16 @@ export function PersonCard({ person }: Props) {
           {/* ── Attributes as chips ───────────────────────────────────── */}
           {person.attributes.length > 0 && (
             <>
-              <div className="h-px bg-gray-50 mx-4" />
+              <div className="h-px mx-4 bg-white/40" />
               <div className="px-4 py-3">
                 <div className="flex flex-wrap gap-1.5">
                   {person.attributes.map((attr) => (
                     <span
                       key={attr.id}
-                      className="inline-flex items-baseline gap-1 bg-gray-50 border border-gray-100 rounded-full px-2.5 py-1 text-xs"
+                      className="inline-flex items-baseline gap-1 rounded-full px-2.5 py-1 text-xs bg-white/50 text-[#284e72]"
                     >
-                      <span className="text-muted-foreground">{attr.key}</span>
-                      <span className="font-medium text-gray-800">{attr.value}</span>
+                      <span className="opacity-70">{attr.key}</span>
+                      <span className="font-medium">{attr.value}</span>
                     </span>
                   ))}
                 </div>
@@ -164,9 +162,9 @@ export function PersonCard({ person }: Props) {
           {/* ── Family members ────────────────────────────────────────── */}
           {person.family_members.length > 0 && (
             <>
-              <div className="h-px bg-gray-50 mx-4" />
+              <div className="h-px mx-4 bg-white/40" />
               <div className="px-4 py-3 space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <p className="text-xs font-medium text-[#284e72]/70 uppercase tracking-wide flex items-center gap-1.5">
                   <Users className="w-3 h-3" />
                   Family
                 </p>
@@ -180,7 +178,7 @@ export function PersonCard({ person }: Props) {
                         {capitalize(fm.relation)}
                       </Badge>
                       <div className="min-w-0">
-                        <span className="text-sm font-medium text-gray-800">
+                        <span className="text-sm font-medium text-[#1a2a3a]">
                           {fm.name}
                         </span>
                         {fm.attributes.length > 0 && (
@@ -199,9 +197,9 @@ export function PersonCard({ person }: Props) {
           {/* ── Meeting history ───────────────────────────────────────── */}
           {person.meetings.length > 0 && (
             <>
-              <div className="h-px bg-gray-50 mx-4" />
+              <div className="h-px mx-4 bg-white/40" />
               <div className="px-4 py-3 space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <p className="text-xs font-medium text-[#284e72]/70 uppercase tracking-wide flex items-center gap-1.5">
                   <Calendar className="w-3 h-3" />
                   Meetings ({person.meetings.length})
                 </p>
@@ -209,7 +207,7 @@ export function PersonCard({ person }: Props) {
                   {person.meetings.slice(0, 3).map((m) => (
                     <div key={m.id} className="text-sm space-y-0.5">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                        <span className="font-medium text-gray-700" title={formatDate(m.meeting_date)}>
+                        <span className="font-medium text-[#284e72]" title={formatDate(m.meeting_date)}>
                           {formatRelativeDate(m.meeting_date)}
                         </span>
                         {m.location && (
@@ -220,7 +218,7 @@ export function PersonCard({ person }: Props) {
                         )}
                       </div>
                       {m.summary && (
-                        <p className="text-gray-600 text-xs leading-snug line-clamp-2">
+                        <p className="text-[#284e72]/70 text-xs leading-snug line-clamp-2">
                           {m.summary}
                         </p>
                       )}
@@ -241,9 +239,9 @@ export function PersonCard({ person }: Props) {
           {/* ── Notes ────────────────────────────────────────────────── */}
           {person.notes && (
             <>
-              <div className="h-px bg-gray-50 mx-4" />
+              <div className="h-px mx-4 bg-white/40" />
               <div className="px-4 py-3">
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-xs text-[#284e72]/70 leading-relaxed">
                   {person.notes}
                 </p>
               </div>

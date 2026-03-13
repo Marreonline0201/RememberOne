@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Brain, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 type Mode = "signin" | "signup";
 
@@ -140,14 +140,26 @@ export default function LoginPage() {
       On very small phones (375px) the card fills the available width with px-4 gutters.
       On sm+ it is constrained to max-w-sm.
     */
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{ background: "linear-gradient(to bottom right, #ddf6ff, #fbf6ff)" }}>
       <div className="w-full max-w-sm space-y-6">
         {/* Branding */}
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-foreground shadow-md">
-            <Brain className="w-7 h-7" />
+          {/* Logo from Figma — person + pen tool */}
+          <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl shadow-md bg-white border border-gray-100">
+            <img
+              src="https://www.figma.com/api/mcp/asset/d1762fb9-95a9-43ec-867e-5178b2708904"
+              alt=""
+              className="absolute w-8 h-8 object-contain"
+              style={{ top: "10px", left: "10px" }}
+            />
+            <img
+              src="https://www.figma.com/api/mcp/asset/c73891f6-398c-4d3b-8fa3-cd625031c03d"
+              alt=""
+              className="absolute w-6 h-6 object-contain"
+              style={{ bottom: "8px", right: "8px" }}
+            />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">RememberOne</h1>
+          <h1 className="text-2xl font-normal text-black uppercase tracking-wider" style={{ fontFamily: "'Hammersmith One', sans-serif" }}>RememberOne</h1>
           <p className="text-sm text-muted-foreground">
             Never forget a person you meet
           </p>

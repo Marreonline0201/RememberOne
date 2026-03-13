@@ -17,14 +17,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <DashboardNav user={user} />
       {/*
         On mobile the bottom tab bar is 64px tall (h-16).
         We add pb-20 (80px) so content is never hidden behind it.
         On md+ the bottom bar is hidden, so we reset to pb-8.
       */}
-      <main className="max-w-5xl mx-auto px-4 pt-6 pb-24 md:pb-10 safe-left safe-right">
+      <main className="max-w-5xl mx-auto px-4 pt-24 pb-24 md:pt-6 md:pb-10 safe-left safe-right">
         {children}
       </main>
     </div>

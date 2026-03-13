@@ -5,13 +5,8 @@
 // Mobile-first: full-width person rows, adequate touch targets.
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bell, Calendar, Clock, ChevronRight, X } from "lucide-react";
-import { formatDate, formatTime, getInitials } from "@/lib/utils";
+import { Bell, MoreVertical } from "lucide-react";
+import { formatTime } from "@/lib/utils";
 import type { UpcomingMeetingAlert as AlertType, PersonFull } from "@/types/app";
 
 interface Props {
@@ -51,90 +46,39 @@ export function UpcomingMeetingAlert({ people }: Props) {
   if (visibleAlerts.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      {/* Section label */}
-      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-        <Bell className="w-4 h-4 text-blue-500 shrink-0" />
-        Upcoming meetings with people you know
-      </div>
-
+    <div className="space-y-2">
       {visibleAlerts.map((alert) => (
-        <Alert key={alert.event.id} variant="info" className="relative pr-11">
-          {/* Dismiss — 44px touch target */}
+        <div
+          key={alert.event.id}
+          className="relative flex items-center gap-3 px-4 rounded-[10px] h-[61px]"
+          style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
+        >
+          {/* Bell icon */}
+          <Bell className="w-[22px] h-[22px] text-white shrink-0" />
+
+          {/* Time + name */}
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-white uppercase tracking-wide text-[15px] truncate"
+              style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+            >
+              {formatTime(alert.event.start)} {alert.matchedPeople[0]?.name ?? alert.event.summary}
+            </p>
+          </div>
+
+          {/* Three-dot dismiss */}
           <button
             onClick={() =>
               setDismissed(
                 (prev) => new Set(Array.from(prev).concat(alert.event.id))
               )
             }
-            className="absolute right-2 top-2 p-2 text-muted-foreground hover:text-gray-700 transition-colors rounded-md"
+            className="flex flex-col items-center justify-center gap-[3px] p-2 shrink-0"
             aria-label="Dismiss alert"
           >
-            <X className="w-4 h-4" />
+            <MoreVertical className="w-4 h-4 text-white opacity-80" />
           </button>
-
-          <Calendar className="h-4 w-4 shrink-0" />
-
-          <AlertTitle className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2 flex-wrap pr-2">
-            <span className="font-semibold">{alert.event.summary}</span>
-            <Badge variant="secondary" className="text-xs gap-1 w-fit">
-              <Clock className="w-3 h-3" />
-              {formatDate(alert.event.start)} at {formatTime(alert.event.start)}
-            </Badge>
-          </AlertTitle>
-
-          <AlertDescription className="mt-3 space-y-3">
-            {alert.event.description && (
-              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                {alert.event.description}
-              </p>
-            )}
-
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-gray-700">
-                People you know in this meeting:
-              </p>
-              {alert.matchedPeople.map((person) => (
-                <div
-                  key={person.id}
-                  className="flex items-center justify-between gap-3 bg-white rounded-lg border px-3 py-2"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Avatar className="w-9 h-9 shrink-0">
-                      <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-semibold">
-                        {getInitials(person.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {person.name}
-                      </p>
-                      {person.attributes.length > 0 && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {person.attributes[0].value}
-                          {person.attributes[1] &&
-                            ` · ${person.attributes[1].value}`}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {/* View profile — 44px touch target */}
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 h-9 gap-1 text-xs"
-                  >
-                    <Link href={`/people/${person.id}`}>
-                      View
-                      <ChevronRight className="w-3 h-3" />
-                    </Link>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </AlertDescription>
-        </Alert>
+        </div>
       ))}
     </div>
   );
