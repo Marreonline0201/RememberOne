@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getPersonFull } from "@/lib/people";
 import { ProfileEditor } from "@/components/ProfileEditor";
 import { FamilyMemberCard } from "@/components/FamilyMemberCard";
+import { AddFamilyMemberForm } from "@/components/AddFamilyMemberForm";
 import { AddNotesInput } from "@/components/AddNotesInput";
 import { DeletePersonButton } from "@/components/DeletePersonButton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -169,24 +170,23 @@ export default async function PersonPage({ params }: Props) {
       </div>
 
       {/* ── Family members ────────────────────────────────────────────── */}
-      {person.family_members.length > 0 && (
-        <div
-          className="p-4 rounded-[10px_2px_10px_2px]"
-          style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      <div
+        className="p-4 rounded-[10px_2px_10px_2px]"
+        style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      >
+        <p
+          className="text-[13px] uppercase mb-3"
+          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          <p
-            className="text-[13px] uppercase mb-3"
-            style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
-          >
-            Family
-          </p>
-          <div className="space-y-3">
-            {person.family_members.map((fm) => (
-              <FamilyMemberCard key={fm.id} familyMember={fm} personId={person.id} />
-            ))}
-          </div>
+          Family
+        </p>
+        <div className="space-y-3">
+          {person.family_members.map((fm) => (
+            <FamilyMemberCard key={fm.id} familyMember={fm} personId={person.id} />
+          ))}
+          <AddFamilyMemberForm personId={person.id} />
         </div>
-      )}
+      </div>
 
       {/* ── Meeting history ───────────────────────────────────────────── */}
       {person.meetings.length > 0 && (

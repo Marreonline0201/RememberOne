@@ -167,20 +167,18 @@ export function DashboardNav({ user }: Props) {
         {/* People tab */}
         <Link
           href="/"
-          className={`flex flex-col items-center justify-center flex-1 gap-1 text-[11px] font-medium transition-colors ${
-            pathname === "/" ? "text-primary" : "text-muted-foreground"
-          }`}
+          className="flex items-center justify-center flex-1"
+          aria-label="People"
         >
           <Users
             className={`w-5 h-5 ${pathname === "/" ? "text-primary" : "text-muted-foreground"}`}
           />
-          People
         </Link>
 
         {/* Log meeting — gradient-ring mic button */}
         <Link
           href="/meet"
-          className="flex flex-col items-center justify-center flex-1 gap-1 text-[11px] font-medium transition-colors"
+          className="flex items-center justify-center flex-1"
           aria-label="Log a meeting"
         >
           <div
@@ -194,24 +192,19 @@ export function DashboardNav({ user }: Props) {
               />
             </div>
           </div>
-          <span className={pathname === "/meet" ? "text-primary" : "text-muted-foreground"}>
-            Log
-          </span>
         </Link>
 
         {/* Calendar tab */}
         <Link
           href="/calendar"
-          className={`flex flex-col items-center justify-center flex-1 gap-1 text-[11px] font-medium transition-colors ${
-            pathname === "/calendar" ? "text-primary" : "text-muted-foreground"
-          }`}
+          className="flex items-center justify-center flex-1"
+          aria-label="Calendar"
         >
           <CalendarDays
             className={`w-5 h-5 ${
               pathname === "/calendar" ? "text-primary" : "text-muted-foreground"
             }`}
           />
-          Calendar
         </Link>
       </div>
 
