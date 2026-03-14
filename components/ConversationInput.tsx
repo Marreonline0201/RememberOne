@@ -3,6 +3,8 @@
 // ConversationInput — voice-first input matching the Figma mic page design.
 // Input state: big circular mic button + instruction text + tip.
 // Sends transcript to /api/ai/extract, shows preview, then redirects.
+// On Android (Capacitor) uses the native SpeechRecognition plugin.
+// On web falls back to the Web Speech API.
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -17,6 +19,8 @@ import {
   CheckCircle2,
   X,
 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 
 type Step = "input" | "loading" | "success" | "preview";
@@ -37,13 +41,61 @@ export function ConversationInput() {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+  const isNative = Capacitor.isNativePlatform();
+
   useEffect(() => {
     return () => {
-      recognitionRef.current?.stop();
+      if (isNative) {
+        SpeechRecognition.stop().catch(() => {});
+      } else {
+        recognitionRef.current?.stop();
+      }
     };
-  }, []);
+  }, [isNative]);
 
-  function toggleVoice() {
+  async function toggleVoice() {
+    // ── Native (Android / iOS) ───────────────────────────────────────────────
+    if (isNative) {
+      if (listening) {
+        await SpeechRecognition.stop();
+        setListening(false);
+        return;
+      }
+
+      // Request permission
+      const { speechRecognition } = await SpeechRecognition.requestPermission();
+      if (speechRecognition !== "granted") {
+        toast({
+          title: "Microphone permission denied",
+          description: "Please allow microphone access in your device settings.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setListening(true);
+      try {
+        const result = await SpeechRecognition.start({
+          language: "en-US",
+          maxResults: 1,
+          popup: false,
+        });
+        const transcript = result.matches?.[0] ?? "";
+        if (transcript) {
+          setText((prev) => {
+            const joined = prev ? prev.trimEnd() + " " + transcript : transcript;
+            return joined.slice(0, 4000);
+          });
+        }
+      } catch {
+        // user cancelled or error — ignore
+      } finally {
+        setListening(false);
+      }
+      return;
+    }
+
+    // ── Web (browser) ────────────────────────────────────────────────────────
     const SR =
       (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition })
         .SpeechRecognition ??

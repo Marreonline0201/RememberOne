@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPersonFull } from "@/lib/people";
 import { ProfileEditor } from "@/components/ProfileEditor";
+import { EditableName } from "@/components/EditableName";
 import { FamilyMemberCard } from "@/components/FamilyMemberCard";
 import { AddFamilyMemberForm } from "@/components/AddFamilyMemberForm";
 import { AddNotesInput } from "@/components/AddNotesInput";
@@ -74,12 +75,7 @@ export default async function PersonPage({ params }: Props) {
           </Avatar>
 
           <div className="flex-1 min-w-0">
-            <h1
-              className="text-[28px] leading-tight text-black"
-              style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-            >
-              {person.name}
-            </h1>
+            <EditableName personId={person.id} initialName={person.name} />
 
             {person.meetings.length > 0 && (
               <p className="text-[11px] mt-1" style={{ color: "#5e7983" }}>
