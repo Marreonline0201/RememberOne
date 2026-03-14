@@ -63,7 +63,7 @@ export function ConversationInput() {
       }
 
       // Request permission
-      const { speechRecognition } = await SpeechRecognition.requestPermission();
+      const { speechRecognition } = await SpeechRecognition.requestPermissions();
       if (speechRecognition !== "granted") {
         toast({
           title: "Microphone permission denied",
