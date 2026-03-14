@@ -90,6 +90,14 @@
 .safe-right  { padding-right:  env(safe-area-inset-right); }
 
 /*
+  Mobile main content top padding — clears the fixed header (80px) plus
+  the device status bar safe-area inset so content is never hidden behind the header.
+*/
+.pt-safe-header {
+  padding-top: calc(80px + env(safe-area-inset-top));
+}
+
+/*
   Mobile bottom tab bar extends to fill the device safe area so content
   is never hidden behind the home indicator on iOS or gesture bar on Android.
   The `safe-bottom` class adds padding-bottom ON TOP of the base h-16.

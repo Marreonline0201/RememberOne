@@ -24,7 +24,7 @@ export default async function DashboardLayout({
         We add pb-20 (80px) so content is never hidden behind it.
         On md+ the bottom bar is hidden, so we reset to pb-8.
       */}
-      <main className="max-w-5xl mx-auto px-4 pt-24 pb-24 md:pt-6 md:pb-10 safe-left safe-right">
+      <main className="max-w-5xl mx-auto px-5 pt-safe-header pb-24 md:px-8 md:pt-6 md:pb-10">
         {children}
       </main>
     </div>

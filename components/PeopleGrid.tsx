@@ -35,27 +35,27 @@ export function PeopleGrid({ people }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Search bar — only show when there are enough people to warrant filtering */}
+      {/* Search bar */}
       {people.length >= 4 && (
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+            style={{ color: "#5e7983" }}
+          />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, company, city..."
-            /*
-              h-11 = 44px touch target.
-              text-base prevents iOS zoom.
-              pl-9 leaves room for the search icon; pr-9 for the clear button.
-            */
-            className="h-11 text-base md:text-sm pl-9 pr-9"
+            placeholder="Search people..."
+            className="h-11 text-base pl-9 pr-9 rounded-[10px_2px_10px_2px]"
+            style={{ backgroundColor: "#f0e8ff", borderColor: "#dccaff" }}
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gray-700 transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+              style={{ color: "#5e7983" }}
             >
               <X className="w-4 h-4" />
             </button>
@@ -63,32 +63,24 @@ export function PeopleGrid({ people }: Props) {
         </div>
       )}
 
-      {/* Result count — only show while filtering */}
-      {query.trim() && (
-        <p className="text-sm text-muted-foreground">
-          {filtered.length === 0
-            ? "No people match your search."
-            : `${filtered.length} of ${people.length} ${people.length === 1 ? "person" : "people"}`}
-        </p>
-      )}
-
-      {/* Grid */}
+      {/* People — single column, phone-first */}
       {filtered.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-4">
           {filtered.map((person) => (
             <PersonCard key={person.id} person={person} />
           ))}
         </div>
       ) : query.trim() ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-          <Search className="w-8 h-8 text-muted-foreground mb-3 opacity-40" />
-          <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Search className="w-8 h-8 mb-3 opacity-30" style={{ color: "#5e7983" }} />
+          <p className="text-sm" style={{ color: "#5e7983" }}>
             No results for &quot;{query}&quot;
           </p>
           <button
             type="button"
             onClick={() => setQuery("")}
-            className="mt-2 text-sm text-primary hover:underline"
+            className="mt-2 text-sm underline"
+            style={{ color: "#482d7c" }}
           >
             Clear search
           </button>

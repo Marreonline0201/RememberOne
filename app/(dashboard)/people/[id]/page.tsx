@@ -1,34 +1,21 @@
-// Person profile page — shows all saved info about a single person
+// Person profile page — full detail + editing for a saved person.
+// Matches the RememberOne Figma design system.
 
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPersonFull } from "@/lib/people";
 import { ProfileEditor } from "@/components/ProfileEditor";
 import { FamilyMemberCard } from "@/components/FamilyMemberCard";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Calendar, MapPin, Mic } from "lucide-react";
-import Link from "next/link";
-import { formatDate, formatRelativeDate, getInitials } from "@/lib/utils";
-import { DeletePersonButton } from "@/components/DeletePersonButton";
 import { AddNotesInput } from "@/components/AddNotesInput";
+import { DeletePersonButton } from "@/components/DeletePersonButton";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import Link from "next/link";
+import { ArrowLeft, Calendar, MapPin, Mic } from "lucide-react";
+import { formatDate, formatRelativeDate, getInitials, capitalize } from "@/lib/utils";
 
-const PROFILE_PALETTES = [
-  { strip: "from-blue-400 to-blue-600",    avatar: "bg-blue-100 text-blue-700",    ring: "ring-blue-300" },
-  { strip: "from-violet-400 to-purple-600",avatar: "bg-violet-100 text-violet-700",ring: "ring-violet-300" },
-  { strip: "from-emerald-400 to-teal-500", avatar: "bg-emerald-100 text-emerald-700",ring: "ring-emerald-300" },
-  { strip: "from-orange-400 to-amber-500", avatar: "bg-orange-100 text-orange-700",ring: "ring-orange-300" },
-  { strip: "from-pink-400 to-rose-500",    avatar: "bg-pink-100 text-pink-700",    ring: "ring-pink-300" },
-  { strip: "from-teal-400 to-cyan-500",    avatar: "bg-teal-100 text-teal-700",    ring: "ring-teal-300" },
-  { strip: "from-indigo-400 to-blue-500",  avatar: "bg-indigo-100 text-indigo-700",ring: "ring-indigo-300" },
-  { strip: "from-fuchsia-400 to-pink-500", avatar: "bg-fuchsia-100 text-fuchsia-700",ring: "ring-fuchsia-300" },
-];
-function getProfilePalette(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return PROFILE_PALETTES[Math.abs(hash) % PROFILE_PALETTES.length];
+const INTEREST_KEYS = ["interest", "hobby", "hobbies", "sport", "sports", "passion", "likes"];
+function isInterest(key: string) {
+  return INTEREST_KEYS.some((k) => key.toLowerCase().includes(k));
 }
 
 interface Props {
@@ -50,172 +37,206 @@ export async function generateMetadata({ params }: Props) {
 export default async function PersonPage({ params }: Props) {
   const supabase = createClient();
   const person = await getPersonFull(supabase, params.id);
-
   if (!person) notFound();
 
-  const palette = getProfilePalette(person.name);
+  const mainInfo = person.attributes.filter((a) => !isInterest(a.key));
+  const interests = person.attributes.filter((a) => isInterest(a.key));
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-6">
-      {/* Back navigation — desktop only; bottom tab bar serves mobile */}
-      <Button
-        variant="ghost"
-        size="sm"
-        asChild
-        className="hidden md:inline-flex -ml-2"
+    <div className="w-full max-w-lg mx-auto space-y-5">
+      {/* Back — desktop only */}
+      <Link
+        href="/"
+        className="hidden md:inline-flex items-center gap-1 text-sm transition-opacity hover:opacity-70"
+        style={{ color: "#284e72" }}
       >
-        <Link href="/">
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          Back to dashboard
-        </Link>
-      </Button>
+        <ArrowLeft className="w-4 h-4" />
+        Back
+      </Link>
 
-      {/* ── Person header ─────────────────────────────────────────────── */}
-      <div className="flex items-start gap-4">
-        <Avatar className={`w-20 h-20 md:w-24 md:h-24 shrink-0 ring-4 ring-offset-2 ${palette.ring}`}>
-          <AvatarFallback className={`font-bold text-2xl md:text-3xl ${palette.avatar}`}>
-            {getInitials(person.name)}
-          </AvatarFallback>
-        </Avatar>
+      {/* ── Person header ───────────────────────────────────────────────── */}
+      <div
+        className="p-5"
+        style={{
+          borderRadius: "10px 2px 10px 2px",
+          background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
+        }}
+      >
+        <div className="flex items-start gap-4">
+          <Avatar className="w-16 h-16 shrink-0">
+            <AvatarFallback
+              className="text-xl font-bold"
+              style={{ backgroundColor: "#dccaff", color: "#284e72" }}
+            >
+              {getInitials(person.name)}
+            </AvatarFallback>
+          </Avatar>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-extrabold text-gray-900 md:text-2xl leading-tight">
+          <div className="flex-1 min-w-0">
+            <h1
+              className="text-[28px] leading-tight text-black"
+              style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+            >
               {person.name}
             </h1>
+
             {person.meetings.length > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">
-                <Calendar className="w-3 h-3" />
-                {person.meetings.length} {person.meetings.length === 1 ? "meeting" : "meetings"}
-              </span>
+              <p className="text-[11px] mt-1" style={{ color: "#5e7983" }}>
+                Last met {formatRelativeDate(person.meetings[0].meeting_date)}
+                {person.meetings.length > 1 && ` · ${person.meetings.length} meetings total`}
+              </p>
+            )}
+
+            {/* Main info chips */}
+            {mainInfo.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {mainInfo.map((attr) => (
+                  <span
+                    key={attr.id}
+                    className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
+                    style={{ backgroundColor: "rgba(220, 202, 255, 0.7)" }}
+                  >
+                    {capitalize(attr.key)}: {attr.value}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
-          {(() => {
-            const jobAttr = person.attributes.find((a) =>
-              ["job title", "company", "occupation", "role", "title"].includes(
-                a.key.toLowerCase()
-              )
-            );
-            const subtitle = jobAttr?.value ?? (person.meetings[0]?.summary || null);
-            return subtitle ? (
-              <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{subtitle}</p>
-            ) : null;
-          })()}
-          <div className="flex flex-wrap gap-2 mt-2">
-            {person.meetings.map((m) => (
-              <Badge key={m.id} variant="secondary" className="text-xs gap-1 py-1">
-                <Calendar className="w-3 h-3" />
-                <span title={formatDate(m.meeting_date)}>{formatRelativeDate(m.meeting_date)}</span>
-                {m.location && (
-                  <>
-                    <MapPin className="w-3 h-3 ml-0.5" />
-                    {m.location}
-                  </>
-                )}
-              </Badge>
-            ))}
-          </div>
-        </div>
 
-        <div className="shrink-0">
           <DeletePersonButton personId={person.id} personName={person.name} />
         </div>
+
+        {/* Interests */}
+        {interests.length > 0 && (
+          <div className="mt-4">
+            <p
+              className="text-[10px] uppercase tracking-wider mb-2"
+              style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+            >
+              Interest
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {interests.map((a) => (
+                <span
+                  key={a.id}
+                  className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
+                  style={{ backgroundColor: "rgba(220, 202, 255, 0.7)" }}
+                >
+                  {a.value}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Log another meeting shortcut ──────────────────────────────── */}
-      <Button asChild variant="outline" className="w-full h-11 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 font-semibold">
-        <Link href={`/meet?person=${encodeURIComponent(person.name)}`}>
-          <Mic className="w-4 h-4" />
-          Log another meeting with {person.name.split(" ")[0]}
-        </Link>
-      </Button>
-
-      <Separator />
+      <Link
+        href={`/meet?person=${encodeURIComponent(person.name)}`}
+        className="flex items-center justify-center gap-2 w-full h-12 rounded-[10px_2px_10px_2px] text-white transition-opacity active:opacity-80"
+        style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
+      >
+        <Mic className="w-4 h-4" />
+        <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
+          LOG MEETING WITH {person.name.split(" ")[0].toUpperCase()}
+        </span>
+      </Link>
 
       {/* ── Add notes / voice input ───────────────────────────────────── */}
-      <AddNotesInput personId={person.id} personName={person.name} />
+      <div
+        className="p-4 rounded-[10px_2px_10px_2px]"
+        style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      >
+        <AddNotesInput personId={person.id} personName={person.name} />
+      </div>
 
-      <Separator />
-
-      {/* ── Editable attributes ───────────────────────────────────────── */}
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold text-gray-900">Details</h2>
+      {/* ── Edit attributes ───────────────────────────────────────────── */}
+      <div
+        className="p-4 rounded-[10px_2px_10px_2px]"
+        style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      >
+        <p
+          className="text-[13px] uppercase mb-3"
+          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+        >
+          Edit Details
+        </p>
         <ProfileEditor
           personId={person.id}
           initialAttributes={person.attributes}
           initialNotes={person.notes ?? ""}
         />
-      </section>
+      </div>
 
       {/* ── Family members ────────────────────────────────────────────── */}
       {person.family_members.length > 0 && (
-        <>
-          <Separator />
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">
-              Family members
-            </h2>
-            {/*
-              Single column on mobile (cards are tall enough to need full width).
-              Two columns on sm+ where width allows.
-            */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {person.family_members.map((fm) => (
-                <FamilyMemberCard
-                  key={fm.id}
-                  familyMember={fm}
-                  personId={person.id}
-                />
-              ))}
-            </div>
-          </section>
-        </>
+        <div
+          className="p-4 rounded-[10px_2px_10px_2px]"
+          style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+        >
+          <p
+            className="text-[13px] uppercase mb-3"
+            style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+          >
+            Family
+          </p>
+          <div className="space-y-3">
+            {person.family_members.map((fm) => (
+              <FamilyMemberCard key={fm.id} familyMember={fm} personId={person.id} />
+            ))}
+          </div>
+        </div>
       )}
 
       {/* ── Meeting history ───────────────────────────────────────────── */}
       {person.meetings.length > 0 && (
-        <>
-          <Separator />
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">
-              Meeting history
-            </h2>
-            <div className="space-y-3">
-              {person.meetings.map((m) => (
-                <div
-                  key={m.id}
-                  className="rounded-xl border bg-card p-4 text-sm space-y-2"
-                >
-                  <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
-                    <Calendar className="w-3.5 h-3.5 shrink-0" />
-                    <span title={formatDate(m.meeting_date)}>{formatRelativeDate(m.meeting_date)}</span>
-                    {m.location && (
-                      <>
-                        <MapPin className="w-3.5 h-3.5 shrink-0 ml-1" />
-                        <span>{m.location}</span>
-                      </>
-                    )}
-                  </div>
-                  {m.summary && (
-                    <p className="text-gray-700 leading-relaxed">{m.summary}</p>
+        <div
+          className="p-4 rounded-[10px_2px_10px_2px]"
+          style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+        >
+          <p
+            className="text-[13px] uppercase mb-3"
+            style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+          >
+            Meetings ({person.meetings.length})
+          </p>
+          <div className="space-y-3">
+            {person.meetings.map((m) => (
+              <div
+                key={m.id}
+                className="p-3 rounded-[8px_2px_8px_2px]"
+                style={{ backgroundColor: "rgba(220, 202, 255, 0.4)" }}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Calendar className="w-3.5 h-3.5 shrink-0" style={{ color: "#5e7983" }} />
+                  <span
+                    className="text-[12px] font-medium"
+                    style={{ color: "#284e72" }}
+                    title={formatDate(m.meeting_date)}
+                  >
+                    {formatRelativeDate(m.meeting_date)}
+                  </span>
+                  {m.location && (
+                    <>
+                      <MapPin className="w-3 h-3 shrink-0" style={{ color: "#5e7983" }} />
+                      <span className="text-[11px]" style={{ color: "#5e7983" }}>
+                        {m.location}
+                      </span>
+                    </>
                   )}
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-gray-600 select-none list-none [&::-webkit-details-marker]:hidden no-underline decoration-transparent">
-                      View original notes
-                    </summary>
-                    <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                      {m.raw_input}
-                    </p>
-                  </details>
                 </div>
-              ))}
-            </div>
-          </section>
-        </>
+                {m.summary && (
+                  <p className="text-[12px] mt-1.5 leading-relaxed" style={{ color: "#284e72" }}>
+                    {m.summary}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Bottom spacer so content clears the mobile tab bar */}
-      <div className="h-4 md:h-0" />
+      <div className="h-4" />
     </div>
   );
 }
