@@ -26,6 +26,7 @@ export default async function CalendarPage() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+  const locale = user.user_metadata?.language === "ko" ? "ko-KR" : "en-US";
 
   const people = await getAllPeopleFull(supabase, user.id);
 
@@ -63,8 +64,8 @@ export default async function CalendarPage() {
     if (!groupMap.has(dateKey)) {
       groupMap.set(dateKey, {
         dateKey,
-        dateLabel: formatDate(entry.meetingDate),
-        relativeLabel: formatRelativeDate(entry.meetingDate),
+        dateLabel: formatDate(entry.meetingDate, locale),
+        relativeLabel: formatRelativeDate(entry.meetingDate, locale),
         entries: [],
       });
     }

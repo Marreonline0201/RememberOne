@@ -38,6 +38,8 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function PersonPage({ params }: Props) {
   const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const locale = user?.user_metadata?.language === "ko" ? "ko-KR" : "en-US";
   const person = await getPersonFull(supabase, params.id);
   if (!person) notFound();
 
@@ -79,8 +81,8 @@ export default async function PersonPage({ params }: Props) {
 
             {person.meetings.length > 0 && (
               <p className="text-[11px] mt-1" style={{ color: "#5e7983" }}>
-                Last met {formatRelativeDate(person.meetings[0].meeting_date)}
-                {person.meetings.length > 1 && ` · ${person.meetings.length} meetings total`}
+                {locale === "ko-KR" ? "마지막 만남" : "Last met"} {formatRelativeDate(person.meetings[0].meeting_date, locale)}
+                {person.meetings.length > 1 && ` · ${person.meetings.length} ${locale === "ko-KR" ? "회 만남" : "meetings total"}`}
               </p>
             )}
 
@@ -208,9 +210,9 @@ export default async function PersonPage({ params }: Props) {
                   <span
                     className="text-[12px] font-medium"
                     style={{ color: "#284e72" }}
-                    title={formatDate(m.meeting_date)}
+                    title={formatDate(m.meeting_date, locale)}
                   >
-                    {formatRelativeDate(m.meeting_date)}
+                    {formatRelativeDate(m.meeting_date, locale)}
                   </span>
                   {m.location && (
                     <>

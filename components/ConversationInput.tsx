@@ -22,6 +22,8 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getLanguage } from "@/lib/i18n";
 
 type Step = "input" | "loading" | "success" | "preview";
 
@@ -33,6 +35,8 @@ interface ExtractionPreview {
 export function ConversationInput() {
   const router = useRouter();
   const { toast } = useToast();
+  const { language, t } = useLanguage();
+  const speechLocale = getLanguage(language).locale;
 
   const [step, setStep] = useState<Step>("input");
   const isLoading = step === "loading";
@@ -66,8 +70,8 @@ export function ConversationInput() {
       const { speechRecognition } = await SpeechRecognition.requestPermissions();
       if (speechRecognition !== "granted") {
         toast({
-          title: "Microphone permission denied",
-          description: "Please allow microphone access in your device settings.",
+          title: t("meet.mic_denied_title"),
+          description: t("meet.mic_denied_body"),
           variant: "destructive",
         });
         return;
@@ -76,7 +80,7 @@ export function ConversationInput() {
       setListening(true);
       try {
         const result = await SpeechRecognition.start({
-          language: "en-US",
+          language: speechLocale,
           maxResults: 1,
           popup: false,
         });
@@ -104,8 +108,8 @@ export function ConversationInput() {
 
     if (!SR) {
       toast({
-        title: "Not supported",
-        description: "Voice input requires Chrome or Edge.",
+        title: t("meet.not_supported_title"),
+        description: t("meet.not_supported_body"),
         variant: "destructive",
       });
       return;
@@ -120,7 +124,7 @@ export function ConversationInput() {
     const recognition = new SR();
     recognition.continuous = true;
     recognition.interimResults = false;
-    recognition.lang = "en-US";
+    recognition.lang = speechLocale;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = Array.from(event.results)
@@ -154,15 +158,15 @@ export function ConversationInput() {
       });
 
       const json = await res.json();
-      if (!res.ok || json.error) throw new Error(json.error ?? "Extraction failed");
+      if (!res.ok || json.error) throw new Error(json.error ?? t("meet.extraction_failed"));
 
       setPreview(json.data);
       setStep("success");
       setTimeout(() => setStep("preview"), 1200);
     } catch (err: unknown) {
       toast({
-        title: "Extraction failed",
-        description: err instanceof Error ? err.message : "Something went wrong",
+        title: t("meet.extraction_failed"),
+        description: err instanceof Error ? err.message : t("meet.something_wrong"),
         variant: "destructive",
       });
       setStep("input");
@@ -207,10 +211,10 @@ export function ConversationInput() {
           className="text-[18px] uppercase text-black"
           style={{ fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          Reading your notes...
+          {t("meet.loading_title")}
         </p>
         <p className="text-[13px]" style={{ color: "#5e7983" }}>
-          AI is extracting people and details.
+          {t("meet.loading_subtitle")}
         </p>
       </div>
     );
@@ -230,7 +234,7 @@ export function ConversationInput() {
           className="text-[20px] uppercase text-black"
           style={{ fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          Saved!
+          {t("meet.saved")}
         </p>
       </div>
     );
@@ -244,8 +248,10 @@ export function ConversationInput() {
           className="text-[13px] text-center"
           style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          Found {preview.extraction.people.length}{" "}
-          {preview.extraction.people.length === 1 ? "person" : "people"} — all saved.
+          {language === "ko"
+            ? `${preview.extraction.people.length}${t("meet.found_people")}을 찾았어요 — ${t("meet.found_all_saved")}`
+            : `Found ${preview.extraction.people.length} ${preview.extraction.people.length === 1 ? "person" : "people"} — ${t("meet.found_all_saved")}`
+          }
         </p>
 
         {preview.extraction.people.map((person: ExtractedPerson, idx: number) => {
@@ -304,7 +310,7 @@ export function ConversationInput() {
             style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
           >
             <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-              GO TO PEOPLE
+              {t("meet.go_to_people")}
             </span>
           </button>
           <button
@@ -313,7 +319,7 @@ export function ConversationInput() {
             style={{ borderColor: "#dccaff", backgroundColor: "#fbf6ff" }}
           >
             <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-              LOG ANOTHER
+              {t("meet.log_another")}
             </span>
           </button>
         </div>
@@ -329,8 +335,7 @@ export function ConversationInput() {
         className="text-[13px] leading-relaxed text-center px-2"
         style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
       >
-        Speak &quot;I met Mike this morning. He has a son named Jake and he is 10
-        years old. He is attending Stony Brook University.&quot;
+        {t("meet.instruction")}
       </p>
 
       {/* Big circle mic button — center of screen */}
@@ -384,7 +389,7 @@ export function ConversationInput() {
             fontFamily: "'Hammersmith One', sans-serif",
           }}
         >
-          {listening ? "LISTENING..." : "CLICK TO BECOME FRIENDLY"}
+          {listening ? t("meet.listening") : t("meet.tap_to_speak")}
         </p>
 
         {/* Transcript display */}
@@ -416,7 +421,7 @@ export function ConversationInput() {
           >
             <Sparkles className="w-4 h-4" />
             <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-              EXTRACT &amp; SAVE
+              {t("meet.extract_save")}
             </span>
           </button>
         )}
@@ -428,10 +433,10 @@ export function ConversationInput() {
           className="text-[11px]"
           style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          TIP: Don&apos;t Know What to Speak?
+          {t("meet.tip_title")}
         </p>
         <p className="text-[10px] mt-0.5" style={{ color: "#5e7983" }}>
-          Speak about Name, School, Job, Interest, Company, Family members, ETC!
+          {t("meet.tip_body")}
         </p>
       </div>
     </div>

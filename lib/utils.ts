@@ -9,13 +9,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Format a date string (ISO or YYYY-MM-DD) to a readable label
-export function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "Unknown date";
+// Format a date string (ISO or YYYY-MM-DD) to a readable label, respecting locale
+export function formatDate(dateStr: string | null | undefined, locale = "en-US"): string {
+  if (!dateStr) return locale.startsWith("ko") ? "날짜 미상" : "Unknown date";
   try {
     const date = parseISO(dateStr);
     if (!isValid(date)) return dateStr;
-    return format(date, "MMMM d, yyyy");
+    return new Intl.DateTimeFormat(locale, { year: "numeric", month: "long", day: "numeric" }).format(date);
   } catch {
     return dateStr;
   }
@@ -56,27 +56,27 @@ export function todayISO(): string {
 
 // Format a date as a human-friendly relative label, e.g. "3 days ago", "today", "2 months ago"
 // Falls back to the full formatted date for dates older than ~1 year.
-export function formatRelativeDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "Unknown date";
+export function formatRelativeDate(dateStr: string | null | undefined, locale = "en-US"): string {
+  if (!dateStr) return locale.startsWith("ko") ? "날짜 미상" : "Unknown date";
   try {
     const date = parseISO(dateStr);
     if (!isValid(date)) return dateStr;
 
+    const ko = locale.startsWith("ko");
     const now = new Date();
-    // Strip time — compare calendar days only
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0) return format(date, "MMMM d, yyyy");
-    if (diffDays === 0) return "today";
-    if (diffDays === 1) return "yesterday";
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 14) return "1 week ago";
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 60) return "1 month ago";
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    if (diffDays < 548) return "1 year ago";
-    return format(date, "MMMM d, yyyy");
+    if (diffDays < 0) return formatDate(dateStr, locale);
+    if (diffDays === 0) return ko ? "오늘" : "today";
+    if (diffDays === 1) return ko ? "어제" : "yesterday";
+    if (diffDays < 7) return ko ? `${diffDays}일 전` : `${diffDays} days ago`;
+    if (diffDays < 14) return ko ? "1주 전" : "1 week ago";
+    if (diffDays < 30) return ko ? `${Math.floor(diffDays / 7)}주 전` : `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 60) return ko ? "1개월 전" : "1 month ago";
+    if (diffDays < 365) return ko ? `${Math.floor(diffDays / 30)}개월 전` : `${Math.floor(diffDays / 30)} months ago`;
+    if (diffDays < 548) return ko ? "1년 전" : "1 year ago";
+    return formatDate(dateStr, locale);
   } catch {
     return dateStr;
   }

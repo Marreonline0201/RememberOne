@@ -1,3 +1,5 @@
+"use client";
+
 // PersonCard — phone-first card matching the Figma design.
 // Tap anywhere on the card → /people/[id] (full edit page).
 // Mic button at bottom-left → /meet?person=Name (quick log meeting).
@@ -6,6 +8,8 @@ import Link from "next/link";
 import { Mic } from "lucide-react";
 import { capitalize, formatRelativeDate } from "@/lib/utils";
 import type { PersonFull } from "@/types/app";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getLanguage } from "@/lib/i18n";
 
 const INTEREST_KEYS = ["interest", "hobby", "hobbies", "sport", "sports", "passion", "likes"];
 
@@ -19,6 +23,8 @@ interface Props {
 }
 
 export function PersonCard({ person }: Props) {
+  const { language, t } = useLanguage();
+  const locale = getLanguage(language).locale;
   const lastMeeting = person.meetings[0] ?? null;
   const mainInfo = person.attributes.filter((a) => !isInterest(a.key));
   const interests = person.attributes.filter((a) => isInterest(a.key));
@@ -44,7 +50,7 @@ export function PersonCard({ person }: Props) {
           </h2>
           {lastMeeting && (
             <p className="text-[10px] shrink-0 mt-2" style={{ color: "#5e7983" }}>
-              Last met {formatRelativeDate(lastMeeting.meeting_date)}
+              {t("person.last_met")} {formatRelativeDate(lastMeeting.meeting_date, locale)}
             </p>
           )}
         </div>
@@ -71,7 +77,7 @@ export function PersonCard({ person }: Props) {
               className="text-[10px] uppercase tracking-wider mb-2"
               style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
             >
-              Family
+              {t("person.family")}
             </p>
             <div className="space-y-2">
               {person.family_members.map((fm) => (
@@ -110,7 +116,7 @@ export function PersonCard({ person }: Props) {
               className="text-[10px] uppercase tracking-wider mb-2"
               style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
             >
-              Interest
+              {t("person.interest")}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {interests.map((a) => (

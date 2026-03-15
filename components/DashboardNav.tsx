@@ -10,6 +10,7 @@ import { Users, CalendarDays, Mic } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Props {
   user: SupabaseUser;
@@ -17,6 +18,7 @@ interface Props {
 
 export function DashboardNav({ user }: Props) {
   const pathname = usePathname();
+  const { t } = useLanguage();
 
   const displayName =
     (user.user_metadata?.full_name as string | undefined) ??
@@ -53,9 +55,9 @@ export function DashboardNav({ user }: Props) {
 
         <nav className="flex items-center gap-1 ml-2">
           {[
-            { href: "/", label: "People" },
-            { href: "/meet", label: "Log meeting" },
-            { href: "/calendar", label: "Calendar" },
+            { href: "/", label: t("nav.people") },
+            { href: "/meet", label: t("nav.log_meeting") },
+            { href: "/calendar", label: t("nav.calendar") },
           ].map(({ href, label }) => (
             <Link
               key={href}

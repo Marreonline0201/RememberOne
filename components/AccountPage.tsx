@@ -6,8 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby } from "lucide-react";
+import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check } from "lucide-react";
 import Link from "next/link";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { languages, type LanguageCode } from "@/lib/i18n";
 
 interface Props {
   user: SupabaseUser;
@@ -16,8 +18,19 @@ interface Props {
 export function AccountPage({ user }: Props) {
   const router = useRouter();
   const supabase = createClient();
+  const { language, setLanguage, t } = useLanguage();
   const [signingOut, setSigningOut] = useState(false);
   const [policyOpen, setPolicyOpen] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const [savingLang, setSavingLang] = useState(false);
+
+  async function handleLanguageChange(code: LanguageCode) {
+    if (code === language) { setLangOpen(false); return; }
+    setSavingLang(true);
+    await setLanguage(code);
+    setSavingLang(false);
+    setLangOpen(false);
+  }
 
   const displayName =
     (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "User";
@@ -60,6 +73,70 @@ export function AccountPage({ user }: Props) {
         </div>
       </div>
 
+      {/* Settings — Language */}
+      <div
+        className="rounded-[10px_2px_10px_2px] border overflow-hidden"
+        style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}
+      >
+        <button
+          onClick={() => setLangOpen((o) => !o)}
+          className="flex items-center justify-between w-full h-11 px-4 text-sm transition-opacity active:opacity-80"
+          style={{ color: "#284e72" }}
+        >
+          <span className="flex items-center gap-3">
+            <Languages className="w-4 h-4 shrink-0" />
+            {t("account.language")}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {languages.find((l) => l.code === language)?.nativeName}
+            </span>
+            {langOpen ? (
+              <ChevronUp className="w-4 h-4 shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 shrink-0" />
+            )}
+          </span>
+        </button>
+
+        {langOpen && (
+          <div
+            className="border-t px-4 py-3 grid grid-cols-2 gap-2"
+            style={{ borderColor: "#dccaff" }}
+          >
+            {languages.map((lang) => {
+              const isSelected = lang.code === language;
+              return (
+                <button
+                  key={lang.code}
+                  onClick={() => handleLanguageChange(lang.code)}
+                  disabled={savingLang}
+                  className="relative flex items-center gap-2 p-2.5 rounded-[8px_2px_8px_2px] border text-left transition-all active:opacity-80 disabled:opacity-60"
+                  style={{
+                    borderColor: isSelected ? "#284e72" : "#dccaff",
+                    backgroundColor: isSelected ? "#e8f4ff" : "white",
+                  }}
+                >
+                  <span className="text-base leading-none">{lang.flag}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-900 leading-tight truncate">
+                      {lang.nativeName}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground truncate">{lang.name}</p>
+                  </div>
+                  {isSelected && (
+                    <Check
+                      className="absolute right-1.5 top-1.5 w-3 h-3 shrink-0"
+                      style={{ color: "#284e72" }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Sign out */}
       <div
         className="p-4 rounded-[10px_2px_10px_2px]"
@@ -69,7 +146,7 @@ export function AccountPage({ user }: Props) {
           className="text-[13px] uppercase mb-3"
           style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          Session
+          {t("account.session")}
         </p>
         <button
           onClick={handleSignOut}
@@ -82,7 +159,7 @@ export function AccountPage({ user }: Props) {
           ) : (
             <LogOut className="w-4 h-4" />
           )}
-          {signingOut ? "Signing out..." : "Sign out"}
+          {signingOut ? t("account.signing_out") : t("account.sign_out")}
         </button>
       </div>
 
@@ -95,23 +172,22 @@ export function AccountPage({ user }: Props) {
           className="text-[13px] uppercase mb-3"
           style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          Delete Account
+          {t("account.delete_account")}
         </p>
 
         <div className="space-y-3 text-sm" style={{ color: "#284e72" }}>
           <p className="leading-relaxed text-[13px]" style={{ color: "#5e7983" }}>
-            To permanently delete your account and all associated data (contacts, meetings, notes),
-            follow these steps:
+            {t("account.delete_description")}
           </p>
 
           <ol className="space-y-2.5">
-            {[
-              "Sign in to RememberOne at remember-one-1.vercel.app",
-              "Open this Account page by tapping your profile picture",
-              'Tap "Sign out" above to confirm your identity',
-              "Send a deletion request to the email below — include the email address associated with your account",
-              "We will permanently delete your account and all data within 30 days",
-            ].map((step, i) => (
+            {([
+              t("account.delete_step1"),
+              t("account.delete_step2"),
+              t("account.delete_step3"),
+              t("account.delete_step4"),
+              t("account.delete_step5"),
+            ]).map((step, i) => (
               <li key={i} className="flex gap-3 text-[13px]" style={{ color: "#5e7983" }}>
                 <span
                   className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white mt-0.5"
@@ -134,16 +210,14 @@ export function AccountPage({ user }: Props) {
           </a>
 
           <p className="text-[11px] pt-1" style={{ color: "#5e7983" }}>
-            Note: deletion is permanent and cannot be undone. All your saved contacts and meeting
-            history will be removed.
+            {t("account.delete_note")}
           </p>
         </div>
 
         <div className="mt-4 flex items-start gap-2 p-3 rounded-lg" style={{ backgroundColor: "rgba(220,202,255,0.4)" }}>
           <Trash2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "#665b7b" }} />
           <p className="text-[12px]" style={{ color: "#665b7b" }}>
-            Data deleted includes: your profile, all saved people, meeting logs, notes, family
-            members, and calendar connections.
+            {t("account.delete_data_note")}
           </p>
         </div>
       </div>
@@ -160,7 +234,7 @@ export function AccountPage({ user }: Props) {
         >
           <span className="flex items-center gap-3">
             <ScrollText className="w-4 h-4 shrink-0" />
-            Policy
+            {t("account.policy")}
           </span>
           {policyOpen ? (
             <ChevronUp className="w-4 h-4 shrink-0" />
@@ -180,7 +254,7 @@ export function AccountPage({ user }: Props) {
               style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
             >
               <ShieldCheck className="w-4 h-4 shrink-0" />
-              Privacy Policy
+              {t("account.privacy_policy")}
             </Link>
             <Link
               href="/child-safety"
@@ -188,7 +262,7 @@ export function AccountPage({ user }: Props) {
               style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
             >
               <Baby className="w-4 h-4 shrink-0" />
-              Child Safety Standards
+              {t("account.child_safety")}
             </Link>
           </div>
         )}

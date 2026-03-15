@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Mic, MicOff, Plus, Sparkles, X } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getLanguage } from "@/lib/i18n";
 
 interface Props {
   personId: string;
@@ -18,6 +20,8 @@ interface Props {
 export function AddNotesInput({ personId, personName }: Props) {
   const router = useRouter();
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const speechLocale = getLanguage(language).locale;
 
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -54,7 +58,7 @@ export function AddNotesInput({ personId, personName }: Props) {
     const recognition = new SR();
     recognition.continuous = true;
     recognition.interimResults = false;
-    recognition.lang = "en-US";
+    recognition.lang = speechLocale;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = Array.from(event.results)

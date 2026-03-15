@@ -37,12 +37,33 @@ export async function GET() {
     }
 
     // Fetch events from Google
-    const { events, newAccessToken } = await fetchUpcomingEvents(
-      connection.access_token,
-      connection.refresh_token,
-      connection.token_expiry,
-      connection.calendar_id
-    );
+    let events: Awaited<ReturnType<typeof fetchUpcomingEvents>>["events"];
+    let newAccessToken: string | null;
+    try {
+      ({ events, newAccessToken } = await fetchUpcomingEvents(
+        connection.access_token,
+        connection.refresh_token,
+        connection.token_expiry,
+        connection.calendar_id
+      ));
+    } catch (googleErr: unknown) {
+      // If the token is revoked or expired beyond refresh, remove the stale
+      // connection so the user can reconnect, and return empty gracefully.
+      const msg =
+        googleErr instanceof Error ? googleErr.message : String(googleErr);
+      if (
+        msg.includes("invalid_grant") ||
+        msg.includes("Token has been expired") ||
+        msg.includes("Invalid Credentials")
+      ) {
+        await supabase
+          .from("calendar_connections")
+          .delete()
+          .eq("id", connection.id);
+        return NextResponse.json({ data: [], error: null });
+      }
+      throw googleErr; // re-throw unexpected errors
+    }
 
     // If token was refreshed, update the DB
     if (newAccessToken) {
