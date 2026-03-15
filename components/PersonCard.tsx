@@ -135,7 +135,7 @@ export function PersonCard({ person }: Props) {
 
       {/* Mic — quick "log meeting with this person" */}
       <Link
-        href={`/meet?person=${encodeURIComponent(person.name)}`}
+        href={`/meet?personId=${person.id}`}
         className="absolute bottom-4 left-4 flex items-center justify-center w-8 h-8 rounded-full transition-opacity active:opacity-70"
         style={{ border: "1.5px solid #2fe0ff" }}
         aria-label={`Log meeting with ${person.name}`}

@@ -1,8 +1,14 @@
 "use client";
 
 // ConversationInput — voice-first input matching the Figma mic page design.
-// Input state: big circular mic button + instruction text + tip.
-// Sends transcript to /api/ai/extract, shows preview, then redirects.
+//
+// General mode (no personId prop):
+//   Sends transcript to /api/ai/extract, shows multi-person preview, then redirects.
+//
+// Person mode (personId + personName props):
+//   Sends transcript to /api/people/[id]/notes — only adds details about that one person,
+//   then navigates back to their profile page.
+//
 // On Android (Capacitor) uses the native SpeechRecognition plugin.
 // On web falls back to the Web Speech API.
 
@@ -18,6 +24,7 @@ import {
   MicOff,
   CheckCircle2,
   X,
+  ArrowLeft,
 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
@@ -32,11 +39,21 @@ interface ExtractionPreview {
   personIds: string[];
 }
 
-export function ConversationInput() {
+interface Props {
+  /** When set, locks this session to adding details for one specific person. */
+  personId?: string;
+  personName?: string;
+}
+
+export function ConversationInput({ personId, personName }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const { language, t } = useLanguage();
   const speechLocale = getLanguage(language).locale;
+  const ko = language === "ko";
+
+  // person-specific mode
+  const isPerson = !!(personId && personName);
 
   const [step, setStep] = useState<Step>("input");
   const isLoading = step === "loading";
@@ -66,7 +83,6 @@ export function ConversationInput() {
         return;
       }
 
-      // Request permission
       const { speechRecognition } = await SpeechRecognition.requestPermissions();
       if (speechRecognition !== "granted") {
         toast({
@@ -145,24 +161,41 @@ export function ConversationInput() {
     setListening(true);
   }
 
+  // ── Submit: person mode uses notes API; general mode uses extract API ────
   async function handleSubmit() {
     if (!text.trim()) return;
-
     setStep("loading");
 
     try {
-      const res = await fetch("/api/ai/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
+      if (isPerson) {
+        // ── Person-specific: add details to one existing person ───────────
+        const res = await fetch(`/api/people/${personId}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const json = await res.json();
+        if (!res.ok || json.error) throw new Error(json.error ?? t("meet.extraction_failed"));
 
-      const json = await res.json();
-      if (!res.ok || json.error) throw new Error(json.error ?? t("meet.extraction_failed"));
+        setStep("success");
+        setTimeout(() => {
+          router.push(`/people/${personId}`);
+          router.refresh();
+        }, 1200);
+      } else {
+        // ── General: extract and save multiple people ──────────────────────
+        const res = await fetch("/api/ai/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const json = await res.json();
+        if (!res.ok || json.error) throw new Error(json.error ?? t("meet.extraction_failed"));
 
-      setPreview(json.data);
-      setStep("success");
-      setTimeout(() => setStep("preview"), 1200);
+        setPreview(json.data);
+        setStep("success");
+        setTimeout(() => setStep("preview"), 1200);
+      }
     } catch (err: unknown) {
       toast({
         title: t("meet.extraction_failed"),
@@ -173,8 +206,8 @@ export function ConversationInput() {
     }
   }
 
-  function handleViewPerson(personId: string) {
-    router.push(`/people/${personId}`);
+  function handleViewPerson(id: string) {
+    router.push(`/people/${id}`);
   }
 
   function handleViewAll() {
@@ -240,7 +273,7 @@ export function ConversationInput() {
     );
   }
 
-  // ── PREVIEW ─────────────────────────────────────────────────────────────
+  // ── PREVIEW (general mode only) ─────────────────────────────────────────
   if (step === "preview" && preview) {
     return (
       <div className="space-y-4">
@@ -248,18 +281,18 @@ export function ConversationInput() {
           className="text-[13px] text-center"
           style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          {language === "ko"
+          {ko
             ? `${preview.extraction.people.length}${t("meet.found_people")}을 찾았어요 — ${t("meet.found_all_saved")}`
             : `Found ${preview.extraction.people.length} ${preview.extraction.people.length === 1 ? "person" : "people"} — ${t("meet.found_all_saved")}`
           }
         </p>
 
         {preview.extraction.people.map((person: ExtractedPerson, idx: number) => {
-          const personId = preview.personIds[idx];
+          const id = preview.personIds[idx];
           return (
             <button
               key={idx}
-              onClick={() => handleViewPerson(personId)}
+              onClick={() => handleViewPerson(id)}
               className="w-full text-left p-4 transition-opacity active:opacity-80"
               style={{
                 borderRadius: "10px 2px 10px 2px",
@@ -327,21 +360,51 @@ export function ConversationInput() {
     );
   }
 
-  // ── INPUT (Figma mic page layout) ────────────────────────────────────────
+  // ── INPUT ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col min-h-[calc(100vh-200px)]">
+
+      {/* Person mode: back link + person name banner */}
+      {isPerson && (
+        <div className="mb-2 space-y-3">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1 text-sm transition-opacity hover:opacity-70"
+            style={{ color: "#284e72" }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {ko ? "뒤로" : "Back"}
+          </button>
+          <div
+            className="px-4 py-3 rounded-[10px_2px_10px_2px]"
+            style={{ background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)" }}
+          >
+            <p className="text-[11px] uppercase tracking-wide mb-0.5" style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}>
+              {ko ? "대상" : "Adding details for"}
+            </p>
+            <p className="text-[22px] text-black" style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
+              {personName}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Instruction text */}
       <p
         className="text-[13px] leading-relaxed text-center px-2"
         style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
       >
-        {t("meet.instruction")}
+        {isPerson
+          ? (ko
+              ? `${personName}에 대해 새로운 정보를 말하거나 입력하세요.`
+              : `Speak or type anything new about ${personName}.`)
+          : t("meet.instruction")
+        }
       </p>
 
-      {/* Big circle mic button — center of screen */}
+      {/* Big circle mic button */}
       <div className="flex flex-col items-center justify-center flex-1 gap-5 py-10">
         <div className="relative">
-          {/* Pulse rings when listening */}
           {listening && (
             <>
               <span
@@ -355,7 +418,6 @@ export function ConversationInput() {
             </>
           )}
 
-          {/* Gradient ring → white interior → mic icon */}
           <button
             type="button"
             onClick={toggleVoice}
@@ -410,7 +472,7 @@ export function ConversationInput() {
           </div>
         )}
 
-        {/* Submit button — appears once there's transcript */}
+        {/* Submit button */}
         {text.trim() && (
           <button
             type="button"
@@ -421,24 +483,29 @@ export function ConversationInput() {
           >
             <Sparkles className="w-4 h-4" />
             <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-              {t("meet.extract_save")}
+              {isPerson
+                ? (ko ? "저장하기" : `SAVE FOR ${personName!.split(" ")[0].toUpperCase()}`)
+                : t("meet.extract_save")
+              }
             </span>
           </button>
         )}
       </div>
 
-      {/* TIP section — bottom */}
-      <div className="text-center pb-4">
-        <p
-          className="text-[11px]"
-          style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
-        >
-          {t("meet.tip_title")}
-        </p>
-        <p className="text-[10px] mt-0.5" style={{ color: "#5e7983" }}>
-          {t("meet.tip_body")}
-        </p>
-      </div>
+      {/* TIP section — bottom (general mode only) */}
+      {!isPerson && (
+        <div className="text-center pb-4">
+          <p
+            className="text-[11px]"
+            style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
+          >
+            {t("meet.tip_title")}
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: "#5e7983" }}>
+            {t("meet.tip_body")}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

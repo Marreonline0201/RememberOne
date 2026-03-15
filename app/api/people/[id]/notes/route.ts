@@ -49,13 +49,16 @@ export async function POST(request: Request, { params }: Params) {
 
     const { text } = parsed.data;
 
+    const lang = (user.user_metadata?.language === "ko" ? "ko" : "en") as "en" | "ko";
+
     // Extract additional info, passing existing family members so Gemini
     // can correctly update their attributes instead of creating wrong new entries
     const extraction = await extractAdditionalInfo(
       text,
       person.name,
       todayISO(),
-      person.family_members.map((fm) => ({ name: fm.name, relation: fm.relation }))
+      person.family_members.map((fm) => ({ name: fm.name, relation: fm.relation })),
+      lang
     );
 
     // Upsert new attributes (keeps existing ones that aren't overwritten)

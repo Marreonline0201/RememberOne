@@ -132,7 +132,7 @@ export default async function PersonPage({ params }: Props) {
 
       {/* ── Log another meeting shortcut ──────────────────────────────── */}
       <Link
-        href={`/meet?person=${encodeURIComponent(person.name)}`}
+        href={`/meet?personId=${person.id}`}
         className="flex items-center justify-center gap-2 w-full h-12 rounded-[10px_2px_10px_2px] text-white transition-opacity active:opacity-80"
         style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
       >

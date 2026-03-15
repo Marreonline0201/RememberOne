@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { extractPeopleFromText } from "@/lib/gemini";
-import { saveExtractionResult } from "@/lib/people";
+import { saveExtractionResult, getAllPeople } from "@/lib/people";
 import { todayISO } from "@/lib/utils";
 import { z } from "zod";
 
@@ -37,8 +37,13 @@ export async function POST(request: Request) {
 
     const { text } = parsed.data;
 
-    // 3. Call Gemini
-    const extraction = await extractPeopleFromText(text, todayISO());
+    // 3. Get user language + existing people for better AI extraction
+    const lang = (user.user_metadata?.language === "ko" ? "ko" : "en") as "en" | "ko";
+    const existingPeople = await getAllPeople(supabase, user.id);
+    const existingNames = existingPeople.map((p) => p.name);
+
+    // 4. Call Gemini
+    const extraction = await extractPeopleFromText(text, todayISO(), lang, existingNames);
 
     if (extraction.people.length === 0) {
       return NextResponse.json(
@@ -51,10 +56,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Persist to database
+    // 5. Persist to database
     const personIds = await saveExtractionResult(supabase, user.id, extraction, text);
 
-    // 5. Return extraction result + created IDs
+    // 6. Return extraction result + created IDs
     return NextResponse.json({
       data: {
         extraction,

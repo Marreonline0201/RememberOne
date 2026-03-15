@@ -14,7 +14,24 @@ export interface AdditionalExtractionResult {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const EXTRACTION_SYSTEM_PROMPT = `You are a personal memory assistant. Your job is to extract structured information about people from a user's natural language description of who they met.
+function buildExtractionPrompt(language: "en" | "ko", existingPeopleNames: string[]): string {
+  const isKorean = language === "ko";
+
+  const keyLanguageRule = isKorean
+    ? `- Attribute keys must be human-readable labels IN KOREAN: "직업", "회사", "대학교", "학교", "취미", "도시", "나이", "전화번호", "이메일", "링크드인" etc.`
+    : `- Attribute keys must be human-readable labels in English Title Case: "Job Title", "Company", "University", "Hobby", "City", "Age", "Phone", "Email", "LinkedIn", etc.`;
+
+  const summaryLanguageRule = isKorean
+    ? `- "summary" must be written in Korean.`
+    : `- "summary" must be written in English.`;
+
+  const existingPeopleSection =
+    existingPeopleNames.length > 0
+      ? `\nKNOWN PEOPLE (already saved — use the EXACT name from this list if the user is referring to one of them):
+${existingPeopleNames.map((n) => `- ${n}`).join("\n")}`
+      : "";
+
+  return `You are a personal memory assistant. Your job is to extract structured information about people from a user's natural language description of who they met.
 
 You must respond with ONLY valid JSON — no markdown fences, no explanation, no extra text. The JSON must exactly match this TypeScript type:
 
@@ -40,23 +57,30 @@ You must respond with ONLY valid JSON — no markdown fences, no explanation, no
   "meeting_date": string | null,             // ISO date "YYYY-MM-DD" if mentioned, otherwise null
   "location": string | null                  // Where the meeting happened, or null
 }
+${existingPeopleSection}
 
 Rules:
-- Extract EVERY person mentioned as a primary contact (people the user directly met).
-- Attribute keys must be human-readable labels in Title Case: "Job Title", "Company", "University", "Hobby", "City", "Age", "Phone", "Email", "LinkedIn", etc.
+- CRITICAL — primary contacts only: Only add a person to the "people" array if the user explicitly says they met that person directly. People mentioned only as someone else's family member (e.g. "his son", "her mother", "their boss") must NOT appear in "people" — they belong only in the "family_members" array of the person who was directly met.
+- CRITICAL — same person across sentences: The user may speak in multiple short bursts. Treat all sentences as one continuous description. If sentences after the first refer to the same person using pronouns or omit the subject (especially in Korean), they all describe the most recently named person.
+- CRITICAL — name matching: If a person's name closely matches a name in the KNOWN PEOPLE list (same person, different romanization, or partial name), use the EXACT name from the known list.
+${keyLanguageRule}
+${summaryLanguageRule}
 - Attribute values must be concise strings.
 - Family member relations must be lowercase singular nouns: "son", "daughter", "spouse", "partner", "mother", "father", "brother", "sister", "cousin", "friend".
-- If the user mentions a date (e.g. "today", "yesterday", "last Tuesday"), resolve it relative to today's date and output as YYYY-MM-DD. If no date is mentioned output null.
+- If the user mentions a date (e.g. "today", "yesterday", "last Tuesday", "오늘", "어제"), resolve it relative to today's date and output as YYYY-MM-DD. If no date is mentioned output null.
 - If you cannot determine a value with confidence, omit that attribute rather than guessing.
 - If no people are mentioned, return { "people": [], "meeting_date": null, "location": null }.`;
+}
 
 export async function extractPeopleFromText(
   userInput: string,
-  todayDate: string
+  todayDate: string,
+  language: "en" | "ko" = "en",
+  existingPeopleNames: string[] = []
 ): Promise<AIExtractionResult> {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
-    systemInstruction: EXTRACTION_SYSTEM_PROMPT,
+    systemInstruction: buildExtractionPrompt(language, existingPeopleNames),
   });
 
   const userMessage = `Today's date is ${todayDate}.
@@ -120,8 +144,17 @@ export async function extractAdditionalInfo(
   userInput: string,
   personName: string,
   todayDate: string,
-  existingFamilyMembers: KnownFamilyMember[] = []
+  existingFamilyMembers: KnownFamilyMember[] = [],
+  language: "en" | "ko" = "en"
 ): Promise<AdditionalExtractionResult> {
+  const isKorean = language === "ko";
+  const keyLanguageRule = isKorean
+    ? `- "attributes" keys must be in Korean: "직업", "회사", "취미", "도시", "나이", "학교", "대학교" etc.`
+    : `- "attributes" keys must be in English Title Case: "Job Title", "Company", "Hobby", "City", "Age", etc.`;
+  const summaryRule = isKorean
+    ? `- "summary" must be written in Korean.`
+    : `- "summary" must be written in English.`;
+
   const familyContext =
     existingFamilyMembers.length > 0
       ? `EXISTING FAMILY MEMBERS OF ${personName} (already saved):\n${existingFamilyMembers
@@ -152,13 +185,13 @@ You must respond with ONLY valid JSON — no markdown fences, no explanation. Ma
 ${familyContext}
 
 Rules:
-- "attributes" are facts about ${personName} themselves: job, company, hobby, city, age, phone, email, etc. Keys in Title Case.
+${keyLanguageRule}
+${summaryRule}
 - CRITICAL — existing family members: If the notes mention an existing family member by name (listed above), add new facts about them as attributes under that family member. Do NOT create a new family member entry for them. Example: if "Bunny (daughter)" already exists and the note says "Bunny is in James Kindergarden", output Bunny in family_members with attribute { "key": "Kindergarten", "value": "James Kindergarden" } — NOT a new family member named James.
 - CRITICAL — names in place/school names: A name that appears as part of a school, institution, or place (e.g. "James Kindergarden", "St. Mary's School", "Lincoln Elementary") is NOT a person. Do not add it to family_members.
 - Only add NEW entries to "family_members" if the person is explicitly stated to be a relative of ${personName} (son, daughter, spouse, partner, sibling, parent, etc.) AND they are not already in the existing list above.
-- "meeting_date": ISO "YYYY-MM-DD" if a date is mentioned, otherwise null.
+- "meeting_date": ISO "YYYY-MM-DD" if a date is mentioned (including Korean date words like "오늘", "어제"), otherwise null.
 - "location": where the meeting/interaction happened, or null.
-- "summary": one concise sentence describing what new information was learned.
 - If no new info is found, return empty arrays and a summary saying so.`;
 
   const model = genAI.getGenerativeModel({
