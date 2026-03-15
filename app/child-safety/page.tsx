@@ -48,7 +48,7 @@ export default function ChildSafetyPage() {
           },
           {
             title: "Contact",
-            body: "For child safety concerns or questions about our standards, contact our designated safety officer at support@rememberone.app.",
+            body: "For child safety concerns or questions about our standards, contact our designated safety officer at comgamemarre@gmail.com",
           },
         ].map(({ title, body }) => (
           <div

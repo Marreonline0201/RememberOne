@@ -7,22 +7,12 @@
 import { useEffect, useState } from "react";
 import { Bell, MoreVertical } from "lucide-react";
 import { formatTime } from "@/lib/utils";
-import type { UpcomingMeetingAlert as AlertType, PersonFull } from "@/types/app";
+import type { UpcomingMeetingAlert as AlertType } from "@/types/app";
 
-interface Props {
-  // Used by the parent to decide whether to render this component at all.
-  // Typed as PersonFull[] to match what getAllPeopleFull returns.
-  people: PersonFull[];
-}
-
-export function UpcomingMeetingAlert({ people }: Props) {
+export function UpcomingMeetingAlert() {
   const [alerts, setAlerts] = useState<AlertType[]>([]);
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-
-  // Suppress unused-variable warning — people prop is used by the parent to
-  // decide whether to render this component at all.
-  void people;
 
   useEffect(() => {
     async function fetchAlerts() {

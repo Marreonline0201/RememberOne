@@ -81,7 +81,7 @@ export default async function CalendarPage() {
     <div className="w-full max-w-lg mx-auto space-y-5">
       {/* Upcoming meeting alert */}
       {calendarConnection && people.length > 0 && (
-        <UpcomingMeetingAlert people={people} />
+        <UpcomingMeetingAlert />
       )}
 
       {/* Empty state */}

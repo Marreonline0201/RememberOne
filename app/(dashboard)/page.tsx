@@ -23,7 +23,7 @@ export default async function DashboardPage() {
     <div className="w-full max-w-lg mx-auto space-y-4">
       {/* Upcoming meeting notification */}
       {calendarConnection && people.length > 0 && (
-        <UpcomingMeetingAlert people={people} />
+        <UpcomingMeetingAlert />
       )}
 
       {/* People list */}
