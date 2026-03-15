@@ -5,13 +5,11 @@
 // Desktop (md+): sticky top horizontal bar with logo, links, user menu.
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Loader2, Users, CalendarDays, Mic } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Users, CalendarDays, Mic } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { createClient } from "@/lib/supabase/client";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { useState } from "react";
 
 interface Props {
   user: SupabaseUser;
@@ -19,22 +17,22 @@ interface Props {
 
 export function DashboardNav({ user }: Props) {
   const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
 
   const displayName =
     (user.user_metadata?.full_name as string | undefined) ??
     user.email ??
     "User";
 
-  async function handleSignOut() {
-    setSigningOut(true);
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
+  const avatarFallback = (
+    <Avatar className="w-8 h-8">
+      <AvatarFallback
+        className="text-white text-xs font-semibold"
+        style={{ background: "linear-gradient(135deg, #284e72, #482d7c)" }}
+      >
+        {getInitials(displayName)}
+      </AvatarFallback>
+    </Avatar>
+  );
 
   // ── DESKTOP TOP NAV ──────────────────────────────────────────────────────
   const desktopNav = (
@@ -75,50 +73,10 @@ export function DashboardNav({ user }: Props) {
 
         <div className="flex-1" />
 
-        {/* User menu */}
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-ring"
-            aria-label="Open user menu"
-          >
-            <Avatar className="w-8 h-8">
-              <AvatarFallback
-                className="text-white text-xs font-semibold"
-                style={{ background: "linear-gradient(to bottom right, #284e72, #482d7c)" }}
-              >
-                {getInitials(displayName)}
-              </AvatarFallback>
-            </Avatar>
-          </button>
-
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-              <div
-                className="absolute right-0 top-10 z-50 w-52 rounded-lg shadow-lg py-1"
-                style={{ backgroundColor: "#fbf6ff", border: "1px solid #dccaff" }}
-              >
-                <div className="px-3 py-2 border-b">
-                  <p className="text-sm font-medium truncate">{displayName}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                </div>
-                <button
-                  onClick={handleSignOut}
-                  disabled={signingOut}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-accent transition-colors disabled:opacity-60"
-                >
-                  {signingOut ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <LogOut className="w-4 h-4" />
-                  )}
-                  {signingOut ? "Signing out..." : "Sign out"}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        {/* Avatar → account page */}
+        <Link href="/account" aria-label="Account">
+          {avatarFallback}
+        </Link>
       </div>
     </header>
   );
@@ -137,27 +95,15 @@ export function DashboardNav({ user }: Props) {
           Remember One
         </span>
 
-        {/* Avatar — opens account sheet */}
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          className="absolute right-4 flex items-center focus:outline-none"
-          aria-label="Open account menu"
-        >
-          <Avatar className="w-8 h-8">
-            <AvatarFallback
-              className="text-white text-xs font-semibold"
-              style={{ background: "linear-gradient(135deg, #284e72, #482d7c)" }}
-            >
-              {getInitials(displayName)}
-            </AvatarFallback>
-          </Avatar>
-        </button>
+        {/* Avatar → account page */}
+        <Link href="/account" className="absolute right-4" aria-label="Account">
+          {avatarFallback}
+        </Link>
       </div>
     </header>
   );
 
   // ── MOBILE BOTTOM TAB BAR ────────────────────────────────────────────────
-  // Tabs: People (/) | Mic (/meet) | Calendar (/calendar)
   const mobileNav = (
     <nav
       className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t mobile-nav-safe"
@@ -207,41 +153,6 @@ export function DashboardNav({ user }: Props) {
           />
         </Link>
       </div>
-
-      {/* Account sheet — slides up from bottom */}
-      {menuOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/40"
-            onClick={() => setMenuOpen(false)}
-          />
-          <div
-            className="fixed bottom-0 inset-x-0 z-50 rounded-t-2xl shadow-xl safe-bottom"
-            style={{ backgroundColor: "#fbf6ff" }}
-          >
-            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1" />
-            <div className="px-5 py-4 border-b">
-              <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-            </div>
-            <div className="px-5 py-3">
-              <button
-                onClick={handleSignOut}
-                disabled={signingOut}
-                className="flex items-center gap-3 w-full py-3 text-sm text-gray-700 disabled:opacity-60"
-              >
-                {signingOut ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                ) : (
-                  <LogOut className="w-5 h-5 text-muted-foreground" />
-                )}
-                {signingOut ? "Signing out..." : "Sign out"}
-              </button>
-            </div>
-            <div className="h-2" />
-          </div>
-        </>
-      )}
     </nav>
   );
 
