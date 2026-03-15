@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "RememberOne",
   webDir: "public",
   server: {
-    url: "https://remember-one-1.vercel.app",
+    url: "https://rememberone.online",
     allowNavigation: ["*.supabase.co", "accounts.google.com"],
   },
   plugins: {
