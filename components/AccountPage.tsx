@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { LogOut, Loader2, Trash2, Mail, ShieldCheck } from "lucide-react";
+import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
@@ -17,6 +17,7 @@ export function AccountPage({ user }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const [signingOut, setSigningOut] = useState(false);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   const displayName =
     (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "User";
@@ -147,15 +148,51 @@ export function AccountPage({ user }: Props) {
         </div>
       </div>
 
-      {/* Privacy Policy */}
-      <Link
-        href="/privacy"
-        className="flex items-center gap-3 w-full h-11 px-4 rounded-[10px_2px_10px_2px] text-sm border transition-opacity active:opacity-80"
-        style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "#f5f0ff" }}
+      {/* Policy */}
+      <div
+        className="rounded-[10px_2px_10px_2px] border overflow-hidden"
+        style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}
       >
-        <ShieldCheck className="w-4 h-4 shrink-0" />
-        Privacy Policy
-      </Link>
+        <button
+          onClick={() => setPolicyOpen((o) => !o)}
+          className="flex items-center justify-between w-full h-11 px-4 text-sm transition-opacity active:opacity-80"
+          style={{ color: "#284e72" }}
+        >
+          <span className="flex items-center gap-3">
+            <ScrollText className="w-4 h-4 shrink-0" />
+            Policy
+          </span>
+          {policyOpen ? (
+            <ChevronUp className="w-4 h-4 shrink-0" />
+          ) : (
+            <ChevronDown className="w-4 h-4 shrink-0" />
+          )}
+        </button>
+
+        {policyOpen && (
+          <div
+            className="border-t px-4 py-3 space-y-2"
+            style={{ borderColor: "#dccaff" }}
+          >
+            <Link
+              href="/privacy"
+              className="flex items-center gap-3 w-full h-10 px-3 rounded-[8px_2px_8px_2px] text-sm border transition-opacity active:opacity-80"
+              style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              Privacy Policy
+            </Link>
+            <Link
+              href="/child-safety"
+              className="flex items-center gap-3 w-full h-10 px-3 rounded-[8px_2px_8px_2px] text-sm border transition-opacity active:opacity-80"
+              style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+            >
+              <Baby className="w-4 h-4 shrink-0" />
+              Child Safety Standards
+            </Link>
+          </div>
+        )}
+      </div>
 
     </div>
   );

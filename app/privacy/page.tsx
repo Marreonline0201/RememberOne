@@ -1,9 +1,18 @@
+import Link from "next/link";
+
 export const metadata = { title: "Privacy Policy — RememberOne" };
 
 export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen px-5 py-10" style={{ backgroundColor: "#fbf6ff" }}>
       <div className="max-w-lg mx-auto space-y-6">
+        <Link
+          href="/"
+          className="block text-[13px] uppercase tracking-wide"
+          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+        >
+          ← RememberOne
+        </Link>
         <div>
           <h1
             className="text-[28px] uppercase text-black"
@@ -49,7 +58,10 @@ export default function PrivacyPolicy() {
           <div
             key={title}
             className="p-4 rounded-[10px_2px_10px_2px]"
-            style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+            style={{
+              background: "linear-gradient(to bottom, #ddf6ff, #faf5ff) padding-box, linear-gradient(to bottom, #5e7983, #c9a8e8) border-box",
+              border: "1px solid transparent",
+            }}
           >
             <p
               className="text-[13px] uppercase mb-2"
