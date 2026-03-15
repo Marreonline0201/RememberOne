@@ -12,6 +12,7 @@ android
 ios
 /screenshots
 /screenshot.mjs
+/scripts
 
 .vercel
 .env*.local

@@ -9,8 +9,7 @@ const https = require('https');
 
 const BASE_URL = 'https://remember-one-1.vercel.app';
 const SUPABASE_URL = 'https://vrmbqoboulibhtctibju.supabase.co';
-const SUPABASE_SERVICE_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZybWJxb2JvdWxpYmh0Y3RpYmp1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjgzMzU2NywiZXhwIjoyMDg4NDA5NTY3fQ.SM5y7yYXc9yaQ_pKk7zP5k6wghG8aAy7eecRMSrupPQ';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TEST_EMAIL = 'playwright_test@rememberone-capture.app';
 const TEST_PASS  = 'CaptureTest2026!';
 
