@@ -118,6 +118,21 @@ const keys: Translations = {
     ko: "아동 안전 기준",
   },
 
+  // Home page empty state
+  "home.empty_title": { en: "No one here yet", ko: "아직 아무도 없어요" },
+  "home.empty_body": {
+    en: "Tap the mic button below and describe who you met — AI will save their details automatically.",
+    ko: "아래 마이크 버튼을 눌러 만난 사람을 설명하세요 — AI가 자동으로 정보를 저장해 드립니다.",
+  },
+  "home.log_first": { en: "LOG YOUR FIRST MEETING", ko: "첫 만남 기록하기" },
+
+  // Person page labels
+  "person.edit_details": { en: "Edit Details", ko: "정보 수정" },
+  "person.family_section": { en: "Family", ko: "가족" },
+  "person.interest_section": { en: "Interest", ko: "관심사" },
+  "person.log_meeting_with": { en: "LOG MEETING WITH", ko: "만남 기록하기 —" },
+  "person.back": { en: "Back", ko: "뒤로" },
+
   // Person card labels
   "person.last_met": {
     en: "Last met",
@@ -207,6 +222,79 @@ const keys: Translations = {
   "meet.something_wrong": {
     en: "Something went wrong",
     ko: "문제가 발생했어요",
+  },
+
+  // Privacy Policy page
+  "privacy.title": { en: "Privacy Policy", ko: "개인정보 처리방침" },
+  "privacy.updated": { en: "Last updated: March 2026", ko: "최종 업데이트: 2026년 3월" },
+  "privacy.collect.title": { en: "What we collect", ko: "수집 정보" },
+  "privacy.collect.body": {
+    en: "We collect your email address and name when you create an account. We also store the information you choose to log about people you meet — including their names, attributes, family members, and meeting notes.",
+    ko: "계정 생성 시 이메일 주소와 이름을 수집합니다. 또한 만나는 사람들에 대해 기록하는 정보(이름, 속성, 가족 구성원, 미팅 메모)도 저장합니다.",
+  },
+  "privacy.use.title": { en: "How we use your data", ko: "데이터 사용 방법" },
+  "privacy.use.body": {
+    en: "Your data is used solely to provide the RememberOne service — storing your contacts and generating AI-powered summaries from your meeting notes. We do not sell or share your data with third parties.",
+    ko: "데이터는 RememberOne 서비스 제공에만 사용됩니다 — 연락처 저장 및 미팅 메모에서 AI 요약 생성. 제3자에게 데이터를 판매하거나 공유하지 않습니다.",
+  },
+  "privacy.ai.title": { en: "AI processing", ko: "AI 처리" },
+  "privacy.ai.body": {
+    en: "When you log a meeting, the text you provide is sent to an AI service (Anthropic Claude) to extract structured information. This text is processed to provide the service and is not used to train AI models.",
+    ko: "미팅을 기록할 때 입력한 텍스트는 구조화된 정보 추출을 위해 AI 서비스(Anthropic Claude)로 전송됩니다. 이 텍스트는 서비스 제공 목적으로만 처리되며 AI 모델 훈련에 사용되지 않습니다.",
+  },
+  "privacy.calendar.title": { en: "Google Calendar", ko: "구글 캘린더" },
+  "privacy.calendar.body": {
+    en: "If you connect Google Calendar, we access your calendar events only to show upcoming meeting reminders within the app. We do not store or share your calendar data.",
+    ko: "구글 캘린더를 연결하면 앱 내 예정 미팅 알림 표시를 위해서만 캘린더 이벤트에 접근합니다. 캘린더 데이터는 저장하거나 공유하지 않습니다.",
+  },
+  "privacy.storage.title": { en: "Data storage", ko: "데이터 보관" },
+  "privacy.storage.body": {
+    en: "Your data is stored securely using Supabase. We use industry-standard encryption in transit and at rest.",
+    ko: "데이터는 Supabase를 통해 안전하게 저장됩니다. 전송 중 및 저장 시 업계 표준 암호화를 사용합니다.",
+  },
+  "privacy.deletion.title": { en: "Account deletion", ko: "계정 삭제" },
+  "privacy.deletion.body": {
+    en: "You can request deletion of your account and all associated data at any time by visiting your Account page in the app and following the deletion instructions. All data is permanently removed within 30 days.",
+    ko: "앱의 계정 페이지에서 언제든지 계정 및 모든 관련 데이터 삭제를 요청할 수 있습니다. 모든 데이터는 30일 이내에 영구적으로 삭제됩니다.",
+  },
+  "privacy.contact.title": { en: "Contact", ko: "연락처" },
+  "privacy.contact.body": {
+    en: "For any privacy-related questions or requests, contact us at comgamemarre@gmail.com.",
+    ko: "개인정보 관련 질문이나 요청은 comgamemarre@gmail.com으로 연락해 주세요.",
+  },
+
+  // Child Safety page
+  "child.title": { en: "Child Safety Standards", ko: "아동 안전 기준" },
+  "child.updated": { en: "Last updated: March 2026", ko: "최종 업데이트: 2026년 3월" },
+  "child.commitment.title": { en: "Our Commitment", ko: "우리의 약속" },
+  "child.commitment.body": {
+    en: "RememberOne is committed to the safety and protection of children. We have zero tolerance for child sexual abuse material (CSAM) or any content that exploits or endangers minors.",
+    ko: "RememberOne은 아동의 안전과 보호를 최우선으로 합니다. 아동 성적 학대 자료(CSAM) 또는 미성년자를 착취하거나 위험에 빠뜨리는 모든 콘텐츠에 무관용 원칙을 적용합니다.",
+  },
+  "child.prohibited.title": { en: "Prohibited Content", ko: "금지 콘텐츠" },
+  "child.prohibited.body": {
+    en: "Our platform strictly prohibits the creation, distribution, or storage of any content that sexually exploits or abuses minors. Any such content will be immediately removed, and the responsible accounts will be permanently banned.",
+    ko: "당사 플랫폼은 미성년자를 성적으로 착취하거나 학대하는 콘텐츠의 생성, 배포 또는 저장을 엄격히 금지합니다. 해당 콘텐츠는 즉시 삭제되며 관련 계정은 영구적으로 정지됩니다.",
+  },
+  "child.reporting.title": { en: "Reporting Mechanism", ko: "신고 방법" },
+  "child.reporting.body": {
+    en: "Users can report child safety concerns directly in the app. If you encounter any content or behavior that may endanger a child, please contact us immediately at support@rememberone.app. All reports are reviewed promptly.",
+    ko: "사용자는 앱에서 직접 아동 안전 우려 사항을 신고할 수 있습니다. 아동을 위험에 빠뜨릴 수 있는 콘텐츠나 행동을 발견하면 즉시 support@rememberone.app으로 연락해 주세요. 모든 신고는 신속하게 검토됩니다.",
+  },
+  "child.compliance.title": { en: "Compliance", ko: "법적 준수" },
+  "child.compliance.body": {
+    en: "RememberOne complies with all applicable child safety laws and regulations. We report confirmed CSAM to the National Center for Missing & Exploited Children (NCMEC) and cooperate fully with law enforcement agencies.",
+    ko: "RememberOne은 모든 아동 안전 관련 법률 및 규정을 준수합니다. 확인된 CSAM은 실종 및 착취 아동을 위한 국립 센터(NCMEC)에 신고하며 법 집행 기관과 전적으로 협력합니다.",
+  },
+  "child.prevention.title": { en: "Prevention Practices", ko: "예방 조치" },
+  "child.prevention.body": {
+    en: "We employ technical measures and human review processes to detect and prevent child exploitation. Our moderation policies are regularly reviewed and updated to meet evolving safety standards.",
+    ko: "아동 착취를 탐지하고 예방하기 위한 기술적 조치와 인적 검토 프로세스를 운영합니다. 변화하는 안전 기준에 맞춰 관리 정책을 정기적으로 검토하고 업데이트합니다.",
+  },
+  "child.contact.title": { en: "Contact", ko: "연락처" },
+  "child.contact.body": {
+    en: "For child safety concerns or questions about our standards, contact our designated safety officer at comgamemarre@gmail.com",
+    ko: "아동 안전 우려 사항이나 기준에 관한 질문은 지정된 안전 담당자에게 comgamemarre@gmail.com으로 연락해 주세요.",
   },
 };
 

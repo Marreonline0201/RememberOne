@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAllPeopleFull } from "@/lib/people";
 import { PeopleGrid } from "@/components/PeopleGrid";
 import { UpcomingMeetingAlert } from "@/components/UpcomingMeetingAlert";
+import { T } from "@/components/T";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -40,11 +41,10 @@ export default async function DashboardPage() {
               className="text-[22px] uppercase text-black"
               style={{ fontFamily: "'Hammersmith One', sans-serif" }}
             >
-              No one here yet
+              <T k="home.empty_title" />
             </p>
             <p className="text-[13px] mt-2 max-w-xs" style={{ color: "#5e7983" }}>
-              Tap the mic button below and describe who you met — AI will save their
-              details automatically.
+              <T k="home.empty_body" />
             </p>
           </div>
           <Link
@@ -53,7 +53,7 @@ export default async function DashboardPage() {
             style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
           >
             <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-              LOG YOUR FIRST MEETING
+              <T k="home.log_first" />
             </span>
           </Link>
         </div>

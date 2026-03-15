@@ -10,10 +10,13 @@ import { FamilyMemberCard } from "@/components/FamilyMemberCard";
 import { AddFamilyMemberForm } from "@/components/AddFamilyMemberForm";
 import { AddNotesInput } from "@/components/AddNotesInput";
 import { DeletePersonButton } from "@/components/DeletePersonButton";
+import { PersonLastMet } from "@/components/PersonLastMet";
+import { MeetingHistory } from "@/components/MeetingHistory";
+import { T } from "@/components/T";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
-import { ArrowLeft, Calendar, MapPin, Mic } from "lucide-react";
-import { formatDate, formatRelativeDate, getInitials, capitalize } from "@/lib/utils";
+import { ArrowLeft, Mic } from "lucide-react";
+import { getInitials, capitalize } from "@/lib/utils";
 
 const INTEREST_KEYS = ["interest", "hobby", "hobbies", "sport", "sports", "passion", "likes"];
 function isInterest(key: string) {
@@ -38,8 +41,6 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function PersonPage({ params }: Props) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const locale = user?.user_metadata?.language === "ko" ? "ko-KR" : "en-US";
   const person = await getPersonFull(supabase, params.id);
   if (!person) notFound();
 
@@ -55,7 +56,7 @@ export default async function PersonPage({ params }: Props) {
         style={{ color: "#284e72" }}
       >
         <ArrowLeft className="w-4 h-4" />
-        Back
+        <T k="person.back" />
       </Link>
 
       {/* ── Person header ───────────────────────────────────────────────── */}
@@ -80,10 +81,10 @@ export default async function PersonPage({ params }: Props) {
             <EditableName personId={person.id} initialName={person.name} />
 
             {person.meetings.length > 0 && (
-              <p className="text-[11px] mt-1" style={{ color: "#5e7983" }}>
-                {locale === "ko-KR" ? "마지막 만남" : "Last met"} {formatRelativeDate(person.meetings[0].meeting_date, locale)}
-                {person.meetings.length > 1 && ` · ${person.meetings.length} ${locale === "ko-KR" ? "회 만남" : "meetings total"}`}
-              </p>
+              <PersonLastMet
+                lastMeetingDate={person.meetings[0].meeting_date}
+                totalMeetings={person.meetings.length}
+              />
             )}
 
             {/* Main info chips */}
@@ -112,7 +113,7 @@ export default async function PersonPage({ params }: Props) {
               className="text-[10px] uppercase tracking-wider mb-2"
               style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
             >
-              Interest
+              <T k="person.interest_section" />
             </p>
             <div className="flex flex-wrap gap-1.5">
               {interests.map((a) => (
@@ -137,7 +138,7 @@ export default async function PersonPage({ params }: Props) {
       >
         <Mic className="w-4 h-4" />
         <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-          LOG MEETING WITH {person.name.split(" ")[0].toUpperCase()}
+          <T k="person.log_meeting_with" /> {person.name.split(" ")[0].toUpperCase()}
         </span>
       </Link>
 
@@ -158,7 +159,7 @@ export default async function PersonPage({ params }: Props) {
           className="text-[13px] uppercase mb-3"
           style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          Edit Details
+          <T k="person.edit_details" />
         </p>
         <ProfileEditor
           personId={person.id}
@@ -176,7 +177,7 @@ export default async function PersonPage({ params }: Props) {
           className="text-[13px] uppercase mb-3"
           style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          Family
+          <T k="person.family_section" />
         </p>
         <div className="space-y-3">
           {person.family_members.map((fm) => (
@@ -187,52 +188,7 @@ export default async function PersonPage({ params }: Props) {
       </div>
 
       {/* ── Meeting history ───────────────────────────────────────────── */}
-      {person.meetings.length > 0 && (
-        <div
-          className="p-4 rounded-[10px_2px_10px_2px]"
-          style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
-        >
-          <p
-            className="text-[13px] uppercase mb-3"
-            style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
-          >
-            Meetings ({person.meetings.length})
-          </p>
-          <div className="space-y-3">
-            {person.meetings.map((m) => (
-              <div
-                key={m.id}
-                className="p-3 rounded-[8px_2px_8px_2px]"
-                style={{ backgroundColor: "rgba(220, 202, 255, 0.4)" }}
-              >
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Calendar className="w-3.5 h-3.5 shrink-0" style={{ color: "#5e7983" }} />
-                  <span
-                    className="text-[12px] font-medium"
-                    style={{ color: "#284e72" }}
-                    title={formatDate(m.meeting_date, locale)}
-                  >
-                    {formatRelativeDate(m.meeting_date, locale)}
-                  </span>
-                  {m.location && (
-                    <>
-                      <MapPin className="w-3 h-3 shrink-0" style={{ color: "#5e7983" }} />
-                      <span className="text-[11px]" style={{ color: "#5e7983" }}>
-                        {m.location}
-                      </span>
-                    </>
-                  )}
-                </div>
-                {m.summary && (
-                  <p className="text-[12px] mt-1.5 leading-relaxed" style={{ color: "#284e72" }}>
-                    {m.summary}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <MeetingHistory meetings={person.meetings} />
 
       <div className="h-4" />
     </div>

@@ -1,8 +1,32 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { translate, type LanguageCode } from "@/lib/i18n";
 
 export const metadata = { title: "Privacy Policy — RememberOne" };
 
-export default function PrivacyPolicy() {
+export default async function PrivacyPolicy() {
+  // Read language from user metadata if logged in; fallback to English.
+  let lang: LanguageCode = "en";
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.user_metadata?.language === "ko") lang = "ko";
+  } catch {
+    // not logged in or error — default English
+  }
+
+  const t = (key: string) => translate(key, lang);
+
+  const sections = [
+    { titleKey: "privacy.collect.title", bodyKey: "privacy.collect.body" },
+    { titleKey: "privacy.use.title",     bodyKey: "privacy.use.body" },
+    { titleKey: "privacy.ai.title",      bodyKey: "privacy.ai.body" },
+    { titleKey: "privacy.calendar.title",bodyKey: "privacy.calendar.body" },
+    { titleKey: "privacy.storage.title", bodyKey: "privacy.storage.body" },
+    { titleKey: "privacy.deletion.title",bodyKey: "privacy.deletion.body" },
+    { titleKey: "privacy.contact.title", bodyKey: "privacy.contact.body" },
+  ];
+
   return (
     <div className="min-h-screen px-5 py-10" style={{ backgroundColor: "#fbf6ff" }}>
       <div className="max-w-lg mx-auto space-y-6">
@@ -18,45 +42,16 @@ export default function PrivacyPolicy() {
             className="text-[28px] uppercase text-black"
             style={{ fontFamily: "'Hammersmith One', sans-serif" }}
           >
-            Privacy Policy
+            {t("privacy.title")}
           </h1>
           <p className="text-[13px] mt-1" style={{ color: "#5e7983" }}>
-            Last updated: March 2026
+            {t("privacy.updated")}
           </p>
         </div>
 
-        {[
-          {
-            title: "What we collect",
-            body: "We collect your email address and name when you create an account. We also store the information you choose to log about people you meet — including their names, attributes, family members, and meeting notes.",
-          },
-          {
-            title: "How we use your data",
-            body: "Your data is used solely to provide the RememberOne service — storing your contacts and generating AI-powered summaries from your meeting notes. We do not sell or share your data with third parties.",
-          },
-          {
-            title: "AI processing",
-            body: "When you log a meeting, the text you provide is sent to an AI service (Anthropic Claude) to extract structured information. This text is processed to provide the service and is not used to train AI models.",
-          },
-          {
-            title: "Google Calendar",
-            body: "If you connect Google Calendar, we access your calendar events only to show upcoming meeting reminders within the app. We do not store or share your calendar data.",
-          },
-          {
-            title: "Data storage",
-            body: "Your data is stored securely using Supabase. We use industry-standard encryption in transit and at rest.",
-          },
-          {
-            title: "Account deletion",
-            body: "You can request deletion of your account and all associated data at any time by visiting your Account page in the app and following the deletion instructions. All data is permanently removed within 30 days.",
-          },
-          {
-            title: "Contact",
-            body: "For any privacy-related questions or requests, contact us at comgamemarre@gmail.com.",
-          },
-        ].map(({ title, body }) => (
+        {sections.map(({ titleKey, bodyKey }) => (
           <div
-            key={title}
+            key={titleKey}
             className="p-4 rounded-[10px_2px_10px_2px]"
             style={{
               background: "linear-gradient(to bottom, #ddf6ff, #faf5ff) padding-box, linear-gradient(to bottom, #5e7983, #c9a8e8) border-box",
@@ -67,10 +62,10 @@ export default function PrivacyPolicy() {
               className="text-[13px] uppercase mb-2"
               style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
             >
-              {title}
+              {t(titleKey)}
             </p>
             <p className="text-[13px] leading-relaxed" style={{ color: "#5e7983" }}>
-              {body}
+              {t(bodyKey)}
             </p>
           </div>
         ))}
