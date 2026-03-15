@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { LogOut, Loader2, Trash2, Mail } from "lucide-react";
+import { LogOut, Loader2, Trash2, Mail, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 
 interface Props {
   user: SupabaseUser;
@@ -145,6 +146,16 @@ export function AccountPage({ user }: Props) {
           </p>
         </div>
       </div>
+
+      {/* Privacy Policy */}
+      <Link
+        href="/privacy"
+        className="flex items-center gap-3 w-full h-11 px-4 rounded-[10px_2px_10px_2px] text-sm border transition-opacity active:opacity-80"
+        style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "#f5f0ff" }}
+      >
+        <ShieldCheck className="w-4 h-4 shrink-0" />
+        Privacy Policy
+      </Link>
 
     </div>
   );
