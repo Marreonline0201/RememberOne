@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { Mic } from "lucide-react";
-import { capitalize, formatRelativeDate } from "@/lib/utils";
+import { capitalize, localizeKey, formatRelativeDate } from "@/lib/utils";
 import type { PersonFull } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
@@ -64,7 +64,7 @@ export function PersonCard({ person }: Props) {
                 className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
                 style={{ backgroundColor: "#dccaff" }}
               >
-                {capitalize(attr.key)}: {attr.value}
+                {localizeKey(attr.key, language)}: {attr.value}
               </span>
             ))}
           </div>
@@ -100,7 +100,7 @@ export function PersonCard({ person }: Props) {
                       className="text-[9px] px-1.5 py-[2px] rounded-[5px] shadow-sm text-black"
                       style={{ backgroundColor: "#dccaff" }}
                     >
-                      {capitalize(a.key)}: {a.value}
+                      {localizeKey(a.key, language)}: {a.value}
                     </span>
                   ))}
                 </div>

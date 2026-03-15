@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { UpcomingMeetingAlert } from "@/components/UpcomingMeetingAlert";
-import { formatDate, formatRelativeDate, capitalize } from "@/lib/utils";
+import { formatDate, formatRelativeDate, localizeKey } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
 import type { PersonFull } from "@/types/app";
@@ -109,7 +109,7 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
                           className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
                           style={{ backgroundColor: "#dccaff" }}
                         >
-                          {capitalize(attr.key)}: {attr.value}
+                          {localizeKey(attr.key, language)}: {attr.value}
                         </span>
                       ))}
                     </div>

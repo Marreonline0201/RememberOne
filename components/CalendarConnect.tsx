@@ -4,13 +4,14 @@
 // Shown on the dashboard when no calendar is connected.
 // Mobile-first: stacked layout on narrow screens, horizontal on sm+.
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, ExternalLink } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
-export function CalendarConnect() {
+// Inner component reads search params — must be inside a Suspense boundary.
+function CalendarConnectInner() {
   const searchParams = useSearchParams();
   const connected = searchParams.get("calendar_connected") === "true";
   const error = searchParams.get("calendar_error");
@@ -27,10 +28,6 @@ export function CalendarConnect() {
   return (
     <Card className="border-dashed border-2 border-blue-200 bg-blue-50/50">
       <CardContent className="py-4 px-4 sm:py-5 sm:px-6">
-        {/*
-          Mobile: icon + text stacked above the button.
-          sm+: all in one horizontal row.
-        */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           {/* Icon + text */}
           <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -46,14 +43,13 @@ export function CalendarConnect() {
               </p>
               {error && (
                 <p className="text-xs text-red-600 mt-1">
-                  Could not connect: {error.replace(/_/g, " ")}. Please try
-                  again.
+                  Could not connect: {error.replace(/_/g, " ")}. Please try again.
                 </p>
               )}
             </div>
           </div>
 
-          {/* Connect button — full width on mobile, auto on sm+ */}
+          {/* Connect button */}
           <Button
             onClick={handleConnect}
             disabled={connecting}
@@ -65,5 +61,13 @@ export function CalendarConnect() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+export function CalendarConnect() {
+  return (
+    <Suspense fallback={null}>
+      <CalendarConnectInner />
+    </Suspense>
   );
 }

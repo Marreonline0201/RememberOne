@@ -82,6 +82,48 @@ export function formatRelativeDate(dateStr: string | null | undefined, locale = 
   }
 }
 
+// Map of English attribute keys → Korean labels.
+// Keys are lowercase for case-insensitive matching.
+const KEY_KO: Record<string, string> = {
+  // job / work
+  "job": "직업", "job title": "직함", "title": "직함", "role": "역할",
+  "occupation": "직업", "profession": "직업", "work": "직장",
+  "company": "회사", "employer": "회사", "organization": "조직",
+  "department": "부서", "industry": "업종",
+  // education
+  "university": "대학교", "college": "대학교", "school": "학교",
+  "major": "전공", "degree": "학위", "grade": "학년",
+  // personal
+  "age": "나이", "birthday": "생일", "nationality": "국적",
+  "city": "도시", "location": "위치", "country": "나라",
+  "language": "언어", "languages": "언어",
+  // interests
+  "hobby": "취미", "hobbies": "취미", "interest": "관심사",
+  "interests": "관심사", "sport": "스포츠", "sports": "스포츠",
+  "passion": "열정",
+  // contact
+  "phone": "전화번호", "phone number": "전화번호", "mobile": "휴대폰",
+  "email": "이메일", "website": "웹사이트",
+  // social
+  "linkedin": "링크드인", "instagram": "인스타그램",
+  "twitter": "트위터", "facebook": "페이스북",
+  // family relation chips
+  "relation": "관계", "nickname": "별명", "note": "메모",
+};
+
+/**
+ * Localise an attribute key for display.
+ * If language is "ko" and a Korean translation exists, returns it.
+ * Otherwise returns the key with the first letter capitalised.
+ */
+export function localizeKey(key: string, language: string): string {
+  if (language === "ko") {
+    const mapped = KEY_KO[key.toLowerCase().trim()];
+    if (mapped) return mapped;
+  }
+  return capitalize(key);
+}
+
 // Check if a calendar event title or description mentions a person's name
 export function eventMentionsPerson(
   eventSummary: string,

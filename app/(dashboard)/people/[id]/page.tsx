@@ -12,11 +12,12 @@ import { AddNotesInput } from "@/components/AddNotesInput";
 import { DeletePersonButton } from "@/components/DeletePersonButton";
 import { PersonLastMet } from "@/components/PersonLastMet";
 import { MeetingHistory } from "@/components/MeetingHistory";
+import { AttrChip } from "@/components/AttrChip";
 import { T } from "@/components/T";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
 import { ArrowLeft, Mic } from "lucide-react";
-import { getInitials, capitalize } from "@/lib/utils";
+import { getInitials } from "@/lib/utils";
 
 const INTEREST_KEYS = ["interest", "hobby", "hobbies", "sport", "sports", "passion", "likes"];
 function isInterest(key: string) {
@@ -91,13 +92,13 @@ export default async function PersonPage({ params }: Props) {
             {mainInfo.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {mainInfo.map((attr) => (
-                  <span
+                  <AttrChip
                     key={attr.id}
+                    attrKey={attr.key}
+                    value={attr.value}
                     className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
                     style={{ backgroundColor: "rgba(220, 202, 255, 0.7)" }}
-                  >
-                    {capitalize(attr.key)}: {attr.value}
-                  </span>
+                  />
                 ))}
               </div>
             )}

@@ -31,6 +31,7 @@ import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
+import { localizeKey } from "@/lib/utils";
 
 type Step = "input" | "loading" | "success" | "preview";
 
@@ -318,7 +319,7 @@ export function ConversationInput({ personId, personName }: Props) {
                       className="text-[10px] py-0.5 px-2 rounded-[5px]"
                       style={{ backgroundColor: "#dccaff", color: "#1a2a3a" }}
                     >
-                      {attr.key}: {attr.value}
+                      {localizeKey(attr.key, language)}: {attr.value}
                     </Badge>
                   ))}
                 </div>

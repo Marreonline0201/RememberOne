@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Trash2, Loader2, Pencil, Check, X } from "lucide-react";
-import { getInitials, capitalize } from "@/lib/utils";
+import { getInitials, capitalize, localizeKey } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { FamilyMemberFull } from "@/types/app";
 
 interface Props {
@@ -40,6 +41,7 @@ function getRelationColor(relation: string): string {
 export function FamilyMemberCard({ familyMember, personId }: Props) {
   const router = useRouter();
   const { toast } = useToast();
+  const { language } = useLanguage();
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -221,7 +223,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
               <div className="space-y-1.5">
                 {familyMember.attributes.map((attr) => (
                   <div key={attr.id} className="flex gap-2 text-xs">
-                    <span className="text-muted-foreground shrink-0">{attr.key}:</span>
+                    <span className="text-muted-foreground shrink-0">{localizeKey(attr.key, language)}:</span>
                     <span className="text-gray-800">{attr.value}</span>
                   </div>
                 ))}
