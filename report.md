@@ -430,70 +430,314 @@ Stores the Google Calendar access credentials for each user.
 
 ## How Everything Connects (User Flow)
 
-Here is the complete journey from opening the app to viewing a saved person.
+Here is the complete journey from opening the app to every major action.
+
+---
+
+### 1. Opening the App & Logging In
 
 ```
 Open app
     │
     ▼
-Is user logged in?
+Is user logged in? (Supabase session check)
     │
-    ├── No → /login page
+    ├── No → redirect to /login
     │           │
-    │           ├── Google Sign-In → Google OAuth → /auth/callback → save session
-    │           └── Email/Password → send confirmation email → /auth/callback → save session
+    │           ├── "Sign in with Google"
+    │           │       │
+    │           │       ├── Opens Google OAuth consent screen in browser/in-app browser
+    │           │       ├── User approves → Google redirects to /auth/callback with a code
+    │           │       ├── Supabase exchanges code for session tokens
+    │           │       └── User is now logged in → redirect to home (/)
+    │           │
+    │           └── Email & Password
+    │                   │
+    │                   ├── New user: Supabase sends confirmation email
+    │                   │       └── User clicks link → /auth/callback → session created → home (/)
+    │                   └── Returning user: password verified → session created → home (/)
     │
-    └── Yes
+    └── Yes → skip login, go directly to home (/)
+```
+
+---
+
+### 2. First-Time Language Setup
+
+```
+Home page (/) loads
+    │
+    ▼
+Does user have a language set in account metadata?
+    │
+    ├── No (brand new account) → LanguagePickerModal appears on top of the screen
+    │       │
+    │       ├── User taps English → language saved as "en" in Supabase user metadata
+    │       └── User taps Korean → language saved as "ko" in Supabase user metadata
+    │               → All UI text, dates, and AI instructions switch to Korean immediately
+    │
+    └── Yes → modal is skipped, app uses saved language
+```
+
+---
+
+### 3. Home Page — Browsing & Searching People
+
+```
+Home page (/)
+    │
+    ▼
+Fetch all people (GET /api/people — returns full nested data in 5 DB queries)
+    │
+    ├── Zero people saved
+    │       └── Empty state shown: "You haven't saved anyone yet"
+    │               └── "Log Your First Meeting" button → /meet (general mode)
+    │
+    └── People exist → PeopleGrid renders all person cards
+            │
+            ├── Each card shows:
+            │       name, last-met date, key attribute chips (job, company, etc.),
+            │       family member names, interest tags
+            │
+            ├── User types in search box
+            │       └── Filters cards client-side in real time across:
+            │               name, all attribute values, family member names, notes
+            │
+            ├── Google Calendar connected + upcoming match found
+            │       └── Blue UpcomingMeetingAlert banner appears at top
+            │               showing event name, date, matched person's key details
+            │
+            ├── Tap mic icon on a person card → /meet?personId=[id]  (→ see Flow 5)
+            │
+            └── Tap a person card → /people/[id]  (→ see Flow 6)
+```
+
+---
+
+### 4. Logging a New Meeting — General Mode (`/meet`)
+
+```
+User navigates to /meet (via nav tab or "Log Your First Meeting" button)
+    │
+    ▼
+ConversationInput renders in general mode (no person locked)
+    │
+    ├── Voice input (Android/iOS):
+    │       Tap mic → phone native SpeechRecognition starts
+    │       Speak → live transcript appears on screen
+    │       Tap mic again to stop → transcript saved to text area
+    │       (Can tap mic again to append more speech to the same text area)
+    │
+    ├── Voice input (browser — Chrome/Edge):
+    │       Same flow using Web Speech API
+    │       Other browsers: mic disabled, message shown
+    │
+    └── Or: user types directly into the text area
             │
             ▼
-        Has user chosen a language?
-            │
-            ├── No (first login) → LanguagePickerModal appears → user picks English or Korean
-            │                       → saved to user account metadata
-            └── Yes → skip
+        Text is present → "EXTRACT & SAVE" button appears
             │
             ▼
-        Home page (/)
+        User taps "EXTRACT & SAVE"
             │
-            ├── No people saved → empty state → "Log Your First Meeting" button
+            ▼
+        POST /api/ai/extract  { text: "..." }
             │
-            └── People saved → PeopleGrid shows all contacts
-                                │
-                                ├── Tap search → type to filter list
-                                │
-                                ├── Tap person card → /people/[id]
-                                │       │
-                                │       ├── View all info
-                                │       ├── Edit name inline
-                                │       ├── "LOG MEETING WITH" → /meet?personId=... (person mode)
-                                │       ├── Add Notes → voice/text → AI → updates profile
-                                │       ├── Edit Details → change/add/remove attributes
-                                │       ├── Add/edit/delete family members
-                                │       └── View meeting history timeline
-                                │
-                                ├── Tap mic on person card → /meet?personId=... (person mode)
-                                │
-                                └── Tap "Log meeting" nav tab → /meet (general mode)
-                                        │
-                                        ├── Tap mic → speak → transcript appears
-                                        ├── (optional) tap mic again → adds to same transcript
-                                        ├── Or type manually
-                                        └── Tap "EXTRACT & SAVE"
-                                                │
-                                                ▼
-                                            POST /api/ai/extract
-                                                │
-                                                ├── Fetch user's existing people list
-                                                ├── Send to Gemini AI with language + people context
-                                                ├── AI returns structured person data
-                                                ├── saveExtractionResult():
-                                                │       ├── Check if person already exists (by name)
-                                                │       ├── If yes: use existing ID
-                                                │       ├── If no: create new person
-                                                │       ├── Upsert attributes
-                                                │       ├── Upsert family members
-                                                │       └── Insert meeting log
-                                                └── Show preview → "Go to People" or "Log Another"
+            ├── Auth check (must be logged in)
+            ├── Validate text (3–4000 characters)
+            ├── Fetch user's saved people names (for duplicate prevention)
+            ├── Call Gemini AI (gemini-2.5-flash):
+            │       Input:  raw transcript + today's date + language + existing names
+            │       Output: { people: [...], meeting_date, location }
+            │               Each person has: name, summary, attributes[], family_members[]
+            │
+            ├── AI returned 0 people? → return 422 error, show "No people found" message
+            │
+            └── saveExtractionResult() runs for each person:
+                    │
+                    ├── Check if person name already exists in DB (case-insensitive match)
+                    │       ├── Yes → reuse existing person ID, update updated_at timestamp
+                    │       └── No  → INSERT new row into `people` table → get new ID
+                    │
+                    ├── For each extracted attribute:
+                    │       UPSERT into `person_attributes` (person_id + key = unique)
+                    │       → sets or overwrites the value for that key
+                    │
+                    ├── For each extracted family member:
+                    │       Check if family member with same name already exists
+                    │       ├── Yes → reuse existing family member ID
+                    │       └── No  → INSERT into `family_members` (name, relation, person_id)
+                    │       Then UPSERT their attributes into `family_member_attributes`
+                    │
+                    └── INSERT into `meetings` table:
+                            raw_input, meeting_date (resolved by AI or today), location, summary
+                    │
+                    ▼
+            Success → return extraction result + person IDs to client
+                    │
+                    ▼
+            UI shows result preview:
+                    person name, summary, attributes saved, family members saved
+                    │
+                    ├── "Go to People" → home page (/)
+                    └── "Log Another" → clears form, stays on /meet
+```
+
+---
+
+### 5. Logging a Meeting — Person Mode (`/meet?personId=[id]`)
+
+```
+User arrives at /meet?personId=[id]
+(via mic icon on person card, or "LOG MEETING WITH" button on profile)
+    │
+    ▼
+Server fetches person name from DB to confirm they exist
+ConversationInput renders locked to that one person
+Header shows: "Logging meeting with [Name]"
+    │
+    ▼
+User speaks or types (same input flow as general mode)
+    │
+    ▼
+"SAVE FOR [Name]" button appears
+    │
+    ▼
+POST /api/people/[id]/notes  { text: "..." }
+    │
+    ├── Auth + ownership check
+    ├── Fetch full person from DB (including existing family members)
+    ├── Call Gemini AI (extractAdditionalInfo):
+    │       Input:  raw notes + person's name + today's date
+    │               + list of already-known family members (to avoid duplicates)
+    │       Output: { attributes[], family_members[], meeting_date, location, summary }
+    │
+    ├── UPSERT each new attribute into `person_attributes`
+    │       (won't delete existing ones not mentioned)
+    │
+    ├── For each new family member:
+    │       Check if already exists by name
+    │       ├── Yes → reuse ID, upsert any new attributes for them
+    │       └── No  → INSERT new family member, then upsert their attributes
+    │
+    ├── INSERT new row into `meetings` table
+    │
+    ├── UPDATE person's `updated_at` timestamp
+    │
+    └── Return fully updated person object to client
+            │
+            ▼
+    UI shows updated profile inline (attributes, family, meeting log refresh)
+```
+
+---
+
+### 6. Viewing & Editing a Person Profile (`/people/[id]`)
+
+```
+User taps a person card → navigate to /people/[id]
+    │
+    ▼
+Server fetches full person: attributes, family members + their attributes, all meetings
+    │
+    ▼
+Profile page renders:
+    │
+    ├── Header: avatar (initials), name, "Last met X days ago · N meetings"
+    │       └── Tap name → inline text input appears → type new name → press Enter or click away
+    │               → PUT /api/people/[id]  { name: "..." } → name updated in DB
+    │
+    ├── Attribute chips: job, age, school, etc.
+    │
+    ├── "LOG MEETING WITH [Name]" button → /meet?personId=[id]  (→ see Flow 5)
+    │
+    ├── "Add Notes" panel (tap to expand)
+    │       └── Same voice/text input as person mode
+    │               → POST /api/people/[id]/notes  (→ see Flow 5 for detail)
+    │
+    ├── "Edit Details" section
+    │       ├── Shows all attributes as editable key-value fields
+    │       ├── Edit a value → PUT /api/people/[id]/attributes  { key, value }
+    │       ├── Delete an attribute → DELETE /api/people/[id]/attributes  { key }
+    │       └── Add new attribute manually → POST /api/people/[id]/attributes  { key, value }
+    │
+    ├── "Family" section
+    │       ├── Shows each family member as a card (name, relation, their attributes)
+    │       ├── Tap "Add family member" → AddFamilyMemberForm
+    │       │       Fill name + relation → POST /api/people/[id]/family
+    │       ├── Edit family member → PATCH /api/people/[id]/family/[fmId]
+    │       └── Delete family member → DELETE /api/people/[id]/family/[fmId]
+    │
+    ├── "Meetings (N)" section
+    │       Shows timeline of all logged meetings, newest first:
+    │       date · location (if any) · AI summary · original transcript (expandable)
+    │
+    └── "Delete [Name]" button
+            → Confirmation prompt appears
+            → DELETE /api/people/[id]
+            → Removes person + all their attributes, family, meetings from DB
+            → Redirect to home (/)
+```
+
+---
+
+### 7. Calendar Page (`/calendar`)
+
+```
+User taps "Calendar" in nav → /calendar
+    │
+    ▼
+Fetch all meetings across all people (grouped by date, newest first)
+    │
+    ├── Google Calendar connected?
+    │       └── Yes → GET /api/calendar/events
+    │               ├── Fetch events for next 7 days from Google
+    │               ├── Auto-refresh access token if expired
+    │               ├── Compare event attendees + titles against saved people names
+    │               └── Matched events → show UpcomingMeetingAlert banner at top
+    │
+    └── Render meeting timeline:
+            Each date group shows: person name, their info chips, meeting summary
+```
+
+---
+
+### 8. Connecting Google Calendar
+
+```
+User goes to Account page → taps "Connect Google Calendar"
+    │
+    ▼
+GET /api/calendar/connect
+    → Generates Google OAuth URL (scope: read-only calendar access)
+    → Redirects user to Google's permission screen
+        │
+        └── User approves
+                │
+                ▼
+            GET /api/calendar/callback?code=...
+                ├── Exchange code for access_token + refresh_token
+                ├── Save tokens + expiry to `calendar_connections` table
+                └── Redirect back to account page — calendar now connected
+```
+
+---
+
+### 9. Changing Language
+
+```
+User goes to Account page → taps "Language"
+    │
+    ▼
+Language selector expands showing English 🇺🇸 and Korean 🇰🇷
+    │
+    └── User taps a language
+            │
+            ├── Saves language code to Supabase user metadata
+            ├── All UI text re-renders immediately in new language
+            ├── Dates switch format (e.g., "March 15" ↔ "3월 15일")
+            ├── Attribute keys auto-translated in display (e.g., "Job" ↔ "직업")
+            └── From this point on, all new AI extractions store keys in the new language
 ```
 
 ---
