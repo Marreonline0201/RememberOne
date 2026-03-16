@@ -121,6 +121,7 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
   );
   const [selectedDate, setSelectedDate] = useState<string | null>(todayKey);
   const [upcomingAlerts, setUpcomingAlerts] = useState<UpcomingAlertType[]>([]);
+  const [upcomingExpanded, setUpcomingExpanded] = useState(true);
 
   // Fetch upcoming Google Calendar events for dot markers
   useEffect(() => {
@@ -308,14 +309,22 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
       {/* ── Upcoming meetings (always shown right below calendar) ── */}
       {upcomingAlerts.length > 0 && (
         <div className="space-y-3">
-          <p
-            className="text-[12px] uppercase px-1"
-            style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#9b7fda" }}
+          <button
+            onClick={() => setUpcomingExpanded((v) => !v)}
+            className="flex items-center gap-2 px-1 w-full"
           >
-            {ko ? "예정된 만남" : "Upcoming Meetings"}
-          </p>
+            <p
+              className="text-[12px] uppercase"
+              style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#9b7fda" }}
+            >
+              {ko ? "예정된 만남" : "Upcoming Meetings"}
+            </p>
+            <span className="text-[12px] ml-auto transition-transform" style={{ color: "#9b7fda", display: "inline-block", transform: upcomingExpanded ? "rotate(0deg)" : "rotate(-90deg)" }}>
+              ▾
+            </span>
+          </button>
 
-          {upcomingAlerts.map((alert) => {
+          {upcomingExpanded && upcomingAlerts.map((alert) => {
             const eventDate = alert.event.start.slice(0, 10);
             const eventTime = new Date(alert.event.start).toLocaleTimeString(locale, {
               hour: "2-digit",
