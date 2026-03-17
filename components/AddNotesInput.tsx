@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Mic, MicOff, Plus, Sparkles, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 interface Props {
   personId: string;
@@ -20,13 +21,14 @@ interface Props {
 export function AddNotesInput({ personId, personName }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const speechLocale = getLanguage(language).locale;
 
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  const [logMeeting, setLogMeeting] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   // Stop recognition when component unmounts or panel closes
@@ -88,7 +90,7 @@ export function AddNotesInput({ personId, personName }: Props) {
       const res = await fetch(`/api/people/${personId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, logMeeting }),
       });
 
       const json = await res.json();
@@ -101,11 +103,11 @@ export function AddNotesInput({ personId, personName }: Props) {
       const parts: string[] = [];
       if (added.attributes > 0) parts.push(`${added.attributes} detail${added.attributes > 1 ? "s" : ""}`);
       if (added.family_members > 0) parts.push(`${added.family_members} family member${added.family_members > 1 ? "s" : ""}`);
-      parts.push("meeting log");
+      if (logMeeting) parts.push("meeting log");
 
       toast({
-        title: "Notes saved",
-        description: `Added: ${parts.join(", ")}. ${added.summary}`,
+        title: "Saved",
+        description: parts.length > 0 ? `Added: ${parts.join(", ")}.` : "Details updated.",
       });
 
       setText("");
@@ -126,6 +128,7 @@ export function AddNotesInput({ personId, personName }: Props) {
     recognitionRef.current?.stop();
     setListening(false);
     setText("");
+    setLogMeeting(false);
     setOpen(false);
   }
 
@@ -194,6 +197,30 @@ export function AddNotesInput({ personId, personName }: Props) {
             Listening... speak now. Click the mic to stop.
           </p>
         )}
+
+        {/* Meeting toggle */}
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-muted w-fit">
+          <button
+            type="button"
+            onClick={() => setLogMeeting(false)}
+            className={cn(
+              "px-3 py-1 rounded-md text-xs font-medium transition-colors",
+              !logMeeting ? "bg-white shadow-sm text-gray-900" : "text-muted-foreground"
+            )}
+          >
+            {t("meet.log_type_details")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLogMeeting(true)}
+            className={cn(
+              "px-3 py-1 rounded-md text-xs font-medium transition-colors",
+              logMeeting ? "bg-white shadow-sm text-gray-900" : "text-muted-foreground"
+            )}
+          >
+            {t("meet.log_type_met")}
+          </button>
+        </div>
 
         <div className="flex items-center justify-between">
           <p className={`text-xs ${text.length >= 3800 ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>

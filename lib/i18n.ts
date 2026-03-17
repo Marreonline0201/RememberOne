@@ -223,6 +223,14 @@ const keys: Translations = {
     en: "Something went wrong",
     ko: "문제가 발생했어요",
   },
+  "meet.log_type_met": {
+    en: "We met",
+    ko: "만났어요",
+  },
+  "meet.log_type_details": {
+    en: "Just updating details",
+    ko: "정보만 업데이트",
+  },
 
   // Privacy Policy page
   "privacy.title": { en: "Privacy Policy", ko: "개인정보 처리방침" },

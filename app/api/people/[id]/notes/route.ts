@@ -12,6 +12,7 @@ import { z } from "zod";
 
 const RequestSchema = z.object({
   text: z.string().min(3, "Notes must be at least 3 characters").max(4000),
+  logMeeting: z.boolean().optional().default(true),
 });
 
 interface Params {
@@ -47,7 +48,7 @@ export async function POST(request: Request, { params }: Params) {
       );
     }
 
-    const { text } = parsed.data;
+    const { text, logMeeting } = parsed.data;
 
     const lang = (user.user_metadata?.language === "ko" ? "ko" : "en") as "en" | "ko";
 
@@ -130,15 +131,17 @@ export async function POST(request: Request, { params }: Params) {
       }
     }
 
-    // Add meeting log entry
-    await supabase.from("meetings").insert({
-      user_id: user.id,
-      person_id: params.id,
-      raw_input: text,
-      meeting_date: extraction.meeting_date ?? todayISO(),
-      location: extraction.location,
-      summary: extraction.summary,
-    });
+    // Add meeting log entry only when the user actually met this person
+    if (logMeeting) {
+      await supabase.from("meetings").insert({
+        user_id: user.id,
+        person_id: params.id,
+        raw_input: text,
+        meeting_date: extraction.meeting_date ?? todayISO(),
+        location: extraction.location,
+        summary: extraction.summary,
+      });
+    }
 
     // Touch the person's updated_at
     await supabase

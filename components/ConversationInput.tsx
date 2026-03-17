@@ -31,7 +31,7 @@ import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
-import { localizeKey } from "@/lib/utils";
+import { localizeKey, cn } from "@/lib/utils";
 
 type Step = "input" | "loading" | "success" | "preview";
 
@@ -61,6 +61,7 @@ export function ConversationInput({ personId, personName }: Props) {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<ExtractionPreview | null>(null);
   const [listening, setListening] = useState(false);
+  const [logMeeting, setLogMeeting] = useState(true);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const isNative = Capacitor.isNativePlatform();
@@ -173,7 +174,7 @@ export function ConversationInput({ personId, personName }: Props) {
         const res = await fetch(`/api/people/${personId}/notes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, logMeeting }),
         });
         const json = await res.json();
         if (!res.ok || json.error) throw new Error(json.error ?? t("meet.extraction_failed"));
@@ -469,6 +470,38 @@ export function ConversationInput({ personId, personName }: Props) {
               className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-gray-700 transition-colors"
             >
               <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Meeting type toggle — person mode only */}
+        {isPerson && (
+          <div className="flex items-center gap-1 p-1 rounded-lg w-fit mx-auto" style={{ backgroundColor: "rgba(220,202,255,0.3)" }}>
+            <button
+              type="button"
+              onClick={() => setLogMeeting(true)}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                logMeeting
+                  ? "text-white"
+                  : "text-[#5e7983]"
+              )}
+              style={logMeeting ? { background: "linear-gradient(to right, #284e72, #482d7c)" } : {}}
+            >
+              {t("meet.log_type_met")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogMeeting(false)}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                !logMeeting
+                  ? "text-white"
+                  : "text-[#5e7983]"
+              )}
+              style={!logMeeting ? { background: "linear-gradient(to right, #284e72, #482d7c)" } : {}}
+            >
+              {t("meet.log_type_details")}
             </button>
           </div>
         )}
