@@ -96,6 +96,7 @@ export default async function PersonPage({ params }: Props) {
                     key={attr.id}
                     attrKey={attr.key}
                     value={attr.value}
+                    updatedAt={attr.updated_at}
                     className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
                     style={{ backgroundColor: "rgba(220, 202, 255, 0.7)" }}
                   />

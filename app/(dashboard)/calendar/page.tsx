@@ -44,7 +44,7 @@ export default async function CalendarPage() {
     (a, b) => new Date(b.meetingDate).getTime() - new Date(a.meetingDate).getTime()
   );
 
-  // Group by date key (YYYY-MM-DD)
+  // Group by date key (YYYY-MM-DD), deduplicating by person per day
   const groupMap = new Map<string, DayGroup>();
   for (const entry of entries) {
     const dateObj = new Date(entry.meetingDate);
@@ -52,11 +52,15 @@ export default async function CalendarPage() {
     if (!groupMap.has(dateKey)) {
       groupMap.set(dateKey, { dateKey, entries: [] });
     }
-    groupMap.get(dateKey)!.entries.push({
-      person: entry.person,
-      meetingId: entry.meetingId,
-      summary: entry.summary,
-    });
+    const group = groupMap.get(dateKey)!;
+    // Only add the person once per day (entries are already sorted most-recent first)
+    if (!group.entries.some((e) => e.person.id === entry.person.id)) {
+      group.entries.push({
+        person: entry.person,
+        meetingId: entry.meetingId,
+        summary: entry.summary,
+      });
+    }
   }
 
   const groups = Array.from(groupMap.values());

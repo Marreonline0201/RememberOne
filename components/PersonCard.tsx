@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { Mic } from "lucide-react";
-import { capitalize, localizeKey, formatRelativeDate } from "@/lib/utils";
+import { capitalize, localizeKey, localizeRelation, formatRelativeDate, asOfLabel } from "@/lib/utils";
 import type { PersonFull } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
@@ -58,15 +58,19 @@ export function PersonCard({ person }: Props) {
         {/* Main info chips (age, job, school, company, etc.) */}
         {mainInfo.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
-            {mainInfo.map((attr) => (
-              <span
-                key={attr.id}
-                className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
-                style={{ backgroundColor: "#dccaff" }}
-              >
-                {localizeKey(attr.key, language)}: {attr.value}
-              </span>
-            ))}
+            {mainInfo.map((attr) => {
+              const qualifier = asOfLabel(attr.key, attr.updated_at, language);
+              return (
+                <span
+                  key={attr.id}
+                  className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
+                  style={{ backgroundColor: "#dccaff" }}
+                >
+                  {localizeKey(attr.key, language)}: {attr.value}
+                  {qualifier && <span className="opacity-60 ml-1">· {qualifier}</span>}
+                </span>
+              );
+            })}
           </div>
         )}
 
@@ -92,17 +96,21 @@ export function PersonCard({ person }: Props) {
                     className="text-[9px] px-1.5 py-[2px] rounded-[5px] shadow-sm text-black"
                     style={{ backgroundColor: "#dccaff" }}
                   >
-                    {capitalize(fm.relation)}
+                    {localizeRelation(fm.relation, language)}
                   </span>
-                  {fm.attributes.map((a) => (
-                    <span
-                      key={a.id}
-                      className="text-[9px] px-1.5 py-[2px] rounded-[5px] shadow-sm text-black"
-                      style={{ backgroundColor: "#dccaff" }}
-                    >
-                      {localizeKey(a.key, language)}: {a.value}
-                    </span>
-                  ))}
+                  {fm.attributes.map((a) => {
+                    const qualifier = asOfLabel(a.key, a.updated_at, language);
+                    return (
+                      <span
+                        key={a.id}
+                        className="text-[9px] px-1.5 py-[2px] rounded-[5px] shadow-sm text-black"
+                        style={{ backgroundColor: "#dccaff" }}
+                      >
+                        {localizeKey(a.key, language)}: {a.value}
+                        {qualifier && <span className="opacity-60 ml-1">· {qualifier}</span>}
+                      </span>
+                    );
+                  })}
                 </div>
               ))}
             </div>

@@ -124,6 +124,86 @@ export function localizeKey(key: string, language: string): string {
   return capitalize(key);
 }
 
+// Map English relation values stored in DB → Korean display labels
+const RELATION_KO: Record<string, string> = {
+  son: "아들",
+  daughter: "딸",
+  spouse: "배우자",
+  partner: "파트너",
+  wife: "아내",
+  husband: "남편",
+  mother: "어머니",
+  father: "아버지",
+  sister: "여동생",
+  brother: "남동생",
+  friend: "친구",
+  cousin: "사촌",
+  grandmother: "할머니",
+  grandfather: "할아버지",
+  aunt: "이모/고모",
+  uncle: "삼촌",
+};
+
+export function localizeRelation(relation: string, language: string): string {
+  if (language === "ko") {
+    const mapped = RELATION_KO[relation.trim().toLowerCase()];
+    if (mapped) return mapped;
+  }
+  return capitalize(relation);
+}
+
+// Keys whose values change over time and warrant an "As of YYYY" qualifier.
+const TIME_SENSITIVE_KEYS = [
+  // Korean
+  "나이", "학교", "학년", "학급", "직업", "직함", "직위", "역할", "회사", "대학교", "대학",
+  // English — "title" removed (overbroad); covered by "job title"
+  "age", "school", "grade", "class", "job", "job title", "role",
+  "company", "employer", "university", "college", "occupation", "profession",
+];
+
+export function isTimeSensitive(key: string): boolean {
+  const k = key.trim().toLowerCase();
+  // Use word-boundary matching so "class" doesn't match "classified", etc.
+  return TIME_SENSITIVE_KEYS.some((t) => {
+    if (k === t) return true;
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(k);
+  });
+}
+
+/** Returns "as of 2026" or "2026년 기준" if the key is time-sensitive, else "". */
+export function asOfLabel(key: string, updatedAt: string, language: string): string {
+  if (!isTimeSensitive(key)) return "";
+  const year = new Date(updatedAt).getFullYear();
+  if (isNaN(year)) return "";
+  return language === "ko" ? `${year}년 기준` : `as of ${year}`;
+}
+
+// Detect if a family member name is a placeholder (named after their relation).
+// Used to auto-merge placeholders like "Daughter" or "딸" when the real name is later provided.
+const RELATION_KOREAN_PLACEHOLDERS: Record<string, string[]> = {
+  daughter: ["딸"],
+  son: ["아들"],
+  spouse: ["배우자"],
+  wife: ["아내"],
+  husband: ["남편"],
+  mother: ["어머니", "엄마"],
+  father: ["아버지", "아빠"],
+  sister: ["여동생", "언니", "누나"],
+  brother: ["남동생", "형", "오빠"],
+  friend: ["친구"],
+};
+
+export function isRelationPlaceholder(name: string, relation: string): boolean {
+  const n = name.trim().toLowerCase();
+  const r = relation.trim().toLowerCase();
+  // Matches "son", "Son", "son 1", "son 2", etc.
+  if (n === r || /^[a-z]+ \d+$/.test(n) && n.startsWith(r + " ")) return true;
+  // Korean equivalents: "딸", "아들", "딸 1", etc.
+  const korean = RELATION_KOREAN_PLACEHOLDERS[r] ?? [];
+  return korean.some((k) => n === k || n === k + " 1" || /^\S+ \d+$/.test(n) && n.startsWith(k + " "));
+}
+
 // Check if a calendar event title or description mentions a person's name
 export function eventMentionsPerson(
   eventSummary: string,

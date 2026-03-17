@@ -10,8 +10,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Trash2, Loader2, Pencil, Check, X } from "lucide-react";
-import { getInitials, capitalize, localizeKey } from "@/lib/utils";
+import { Trash2, Loader2, Pencil, Check, X, Plus } from "lucide-react";
+import { getInitials, capitalize, localizeKey, localizeRelation, asOfLabel } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { FamilyMemberFull } from "@/types/app";
 
@@ -38,6 +38,12 @@ function getRelationColor(relation: string): string {
   return RELATION_COLORS[relation.toLowerCase()] ?? RELATION_COLORS.default;
 }
 
+interface AttrRow {
+  key: string;
+  value: string;
+  originalKey?: string; // tracks the DB key before editing
+}
+
 export function FamilyMemberCard({ familyMember, personId }: Props) {
   const router = useRouter();
   const { toast } = useToast();
@@ -49,20 +55,70 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
   const [name, setName] = useState(familyMember.name);
   const [relation, setRelation] = useState(familyMember.relation);
   const [notes, setNotes] = useState(familyMember.notes ?? "");
+  const [attrs, setAttrs] = useState<AttrRow[]>(
+    familyMember.attributes.map((a) => ({ key: a.key, value: a.value, originalKey: a.key }))
+  );
 
   const avatarColor = getRelationColor(familyMember.relation);
+
+  function handleAttrChange(index: number, field: "key" | "value", val: string) {
+    setAttrs((prev) => prev.map((a, i) => (i === index ? { ...a, [field]: val } : a)));
+  }
+
+  function handleAddAttr() {
+    setAttrs((prev) => [...prev, { key: "", value: "" }]);
+  }
+
+  function handleRemoveAttr(index: number) {
+    setAttrs((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function handleSave() {
     if (!name.trim() || !relation.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/people/${personId}/family/${familyMember.id}`, {
+      const base = `/api/people/${personId}/family/${familyMember.id}`;
+
+      // 1. Update name / relation / notes
+      const res = await fetch(base, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), relation: relation.trim(), notes: notes.trim() }),
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Update failed");
+
+      // 2. Delete attributes that were removed
+      const removedKeys = familyMember.attributes
+        .map((a) => a.key)
+        .filter((k) => !attrs.some((a) => a.originalKey === k));
+
+      for (const key of removedKeys) {
+        await fetch(`${base}/attributes`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key }),
+        });
+      }
+
+      // 3. Upsert changed / new attributes
+      for (const attr of attrs) {
+        if (!attr.key.trim() || !attr.value.trim()) continue;
+        // If key was renamed, delete the old key first
+        if (attr.originalKey && attr.originalKey !== attr.key.trim()) {
+          await fetch(`${base}/attributes`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: attr.originalKey }),
+          });
+        }
+        await fetch(`${base}/attributes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: attr.key.trim(), value: attr.value.trim() }),
+        });
+      }
+
       toast({ title: "Updated" });
       setEditing(false);
       router.refresh();
@@ -81,6 +137,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
     setName(familyMember.name);
     setRelation(familyMember.relation);
     setNotes(familyMember.notes ?? "");
+    setAttrs(familyMember.attributes.map((a) => ({ key: a.key, value: a.value, originalKey: a.key })));
     setEditing(false);
   }
 
@@ -134,7 +191,50 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
               placeholder="Notes (optional)"
               className="h-9 text-sm"
             />
-            <div className="flex gap-2">
+
+            {/* Attribute rows */}
+            {attrs.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {attrs.map((attr, i) => (
+                  <div key={i} className="flex gap-1.5 items-center">
+                    <Input
+                      value={attr.key}
+                      onChange={(e) => handleAttrChange(i, "key", e.target.value)}
+                      placeholder={language === "ko" ? "항목" : "Key"}
+                      className="h-8 text-xs w-2/5"
+                    />
+                    <Input
+                      value={attr.value}
+                      onChange={(e) => handleAttrChange(i, "value", e.target.value)}
+                      placeholder={language === "ko" ? "값" : "Value"}
+                      className="h-8 text-xs flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground"
+                      onClick={() => handleRemoveAttr(i)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground w-full"
+              onClick={handleAddAttr}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              {language === "ko" ? "항목 추가" : "Add detail"}
+            </Button>
+
+            <div className="flex gap-2 pt-1">
               <Button
                 type="button"
                 size="sm"
@@ -147,7 +247,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
                 ) : (
                   <Check className="w-3 h-3 mr-1" />
                 )}
-                Save
+                {language === "ko" ? "저장" : "Save"}
               </Button>
               <Button
                 type="button"
@@ -177,7 +277,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
                   variant="outline"
                   className={`text-xs mt-0.5 border-0 py-0.5 ${avatarColor}`}
                 >
-                  {capitalize(familyMember.relation)}
+                  {localizeRelation(familyMember.relation, language)}
                 </Badge>
               </div>
 
@@ -221,12 +321,18 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
 
             {familyMember.attributes.length > 0 && (
               <div className="space-y-1.5">
-                {familyMember.attributes.map((attr) => (
-                  <div key={attr.id} className="flex gap-2 text-xs">
-                    <span className="text-muted-foreground shrink-0">{localizeKey(attr.key, language)}:</span>
-                    <span className="text-gray-800">{attr.value}</span>
-                  </div>
-                ))}
+                {familyMember.attributes.map((attr) => {
+                  const qualifier = asOfLabel(attr.key, attr.updated_at, language);
+                  return (
+                    <div key={attr.id} className="flex gap-2 text-xs">
+                      <span className="text-muted-foreground shrink-0">{localizeKey(attr.key, language)}:</span>
+                      <span className="text-gray-800">
+                        {attr.value}
+                        {qualifier && <span className="opacity-50 ml-1">· {qualifier}</span>}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>

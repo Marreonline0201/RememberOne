@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PersonFull, FamilyMemberFull, AIExtractionResult, ExtractedPerson } from "@/types/app";
 import type { Person, PersonAttribute, FamilyMember, FamilyMemberAttribute, Meeting } from "@/types/database";
+import { isRelationPlaceholder } from "@/lib/utils";
 
 // ============================================================
 // Fetch a single person with all nested data
@@ -198,13 +199,34 @@ export async function saveExtractionResult(
 
     // 3. Upsert family members and their attributes
     for (const fm of extracted.family_members) {
-      // Check if this family member already exists
-      const { data: existingFm } = await supabase
+      // 1. Try exact name match
+      let { data: existingFm } = await supabase
         .from("family_members")
         .select("id")
         .eq("person_id", personId)
         .ilike("name", fm.name)
         .maybeSingle();
+
+      // 2. If no match, look for a placeholder with the same relation to merge into
+      if (!existingFm) {
+        const { data: sameRelation } = await supabase
+          .from("family_members")
+          .select("id, name")
+          .eq("person_id", personId)
+          .ilike("relation", fm.relation);
+
+        const placeholders = (sameRelation ?? []).filter((p) =>
+          isRelationPlaceholder(p.name, fm.relation)
+        );
+
+        if (placeholders.length === 1) {
+          await supabase
+            .from("family_members")
+            .update({ name: fm.name })
+            .eq("id", placeholders[0].id);
+          existingFm = { id: placeholders[0].id };
+        }
+      }
 
       let fmId: string;
 

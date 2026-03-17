@@ -13,24 +13,35 @@ interface Props {
   people: PersonFull[];
 }
 
+function isKorean(name: string): boolean {
+  return /^[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/.test(name.trim());
+}
+
+function sortPeople(list: PersonFull[]): PersonFull[] {
+  return [...list].sort((a, b) => {
+    const aKo = isKorean(a.name);
+    const bKo = isKorean(b.name);
+    if (aKo && !bKo) return -1;
+    if (!aKo && bKo) return 1;
+    return a.name.localeCompare(b.name, aKo ? "ko" : "en");
+  });
+}
+
 export function PeopleGrid({ people }: Props) {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return people;
-
-    return people.filter((person) => {
-      // Match on name
-      if (person.name.toLowerCase().includes(q)) return true;
-      // Match on any attribute value (job title, company, city, etc.)
-      if (person.attributes.some((a) => a.value.toLowerCase().includes(q))) return true;
-      // Match on family member names
-      if (person.family_members.some((fm) => fm.name.toLowerCase().includes(q))) return true;
-      // Match on notes
-      if (person.notes?.toLowerCase().includes(q)) return true;
-      return false;
-    });
+    const base = q
+      ? people.filter((person) => {
+          if (person.name.toLowerCase().includes(q)) return true;
+          if (person.attributes.some((a) => a.value.toLowerCase().includes(q))) return true;
+          if (person.family_members.some((fm) => fm.name.toLowerCase().includes(q))) return true;
+          if (person.notes?.toLowerCase().includes(q)) return true;
+          return false;
+        })
+      : people;
+    return sortPeople(base);
   }, [people, query]);
 
   return (

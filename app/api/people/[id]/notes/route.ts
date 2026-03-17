@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getPersonFull } from "@/lib/people";
 import { extractAdditionalInfo } from "@/lib/gemini";
-import { todayISO } from "@/lib/utils";
+import { todayISO, isRelationPlaceholder } from "@/lib/utils";
 import { z } from "zod";
 
 const RequestSchema = z.object({
@@ -73,12 +73,35 @@ export async function POST(request: Request, { params }: Params) {
 
     // Upsert new family members and their attributes
     for (const fm of extraction.family_members) {
-      const { data: existingFm } = await supabase
+      // 1. Try exact name match
+      let { data: existingFm } = await supabase
         .from("family_members")
         .select("id")
         .eq("person_id", params.id)
         .ilike("name", fm.name)
         .maybeSingle();
+
+      // 2. If no match, look for a placeholder with the same relation to merge into
+      if (!existingFm) {
+        const { data: sameRelation } = await supabase
+          .from("family_members")
+          .select("id, name")
+          .eq("person_id", params.id)
+          .ilike("relation", fm.relation);
+
+        const placeholders = (sameRelation ?? []).filter((p) =>
+          isRelationPlaceholder(p.name, fm.relation)
+        );
+
+        if (placeholders.length === 1) {
+          // Promote the placeholder to the real name
+          await supabase
+            .from("family_members")
+            .update({ name: fm.name })
+            .eq("id", placeholders[0].id);
+          existingFm = { id: placeholders[0].id };
+        }
+      }
 
       let fmId: string;
 
