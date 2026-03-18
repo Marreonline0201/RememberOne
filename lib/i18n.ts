@@ -78,8 +78,8 @@ const keys: Translations = {
     ko: "계정과 모든 관련 데이터(연락처, 미팅, 메모)를 영구적으로 삭제하려면 아래 단계를 따르세요.",
   },
   "account.delete_step1": {
-    en: "Sign in to RememberOne at remember-one-1.vercel.app",
-    ko: "remember-one-1.vercel.app에서 RememberOne에 로그인하세요",
+    en: "Sign in to RememberOne at rememberone.online",
+    ko: "rememberone.online에서 RememberOne에 로그인하세요",
   },
   "account.delete_step2": {
     en: "Open this Account page by tapping your profile picture",
@@ -149,7 +149,7 @@ const keys: Translations = {
   // Meet / ConversationInput page
   "meet.instruction": {
     en: "Speak \"I met Mike this morning. He has a son named Jake and he is 10 years old. He is attending Stony Brook University.\"",
-    ko: "말하세요 \"오늘 아침에 마이크를 만났어요. 그에게는 10살 아들 제이크가 있고, 스토니브룩 대학교에 다니고 있어요.\"",
+    ko: "말하세요 \"오늘 아침에 정태현을 만났어요. 그에게는 10살 아들 김민규가 있고, 연세대학교에 다니고 있어요.\"",
   },
   "meet.listening": {
     en: "LISTENING...",
