@@ -247,8 +247,8 @@ const keys: Translations = {
   },
   "privacy.ai.title": { en: "AI processing", ko: "AI 처리" },
   "privacy.ai.body": {
-    en: "When you log a meeting, the text you provide is sent to an AI service (Anthropic Claude) to extract structured information. This text is processed to provide the service and is not used to train AI models.",
-    ko: "미팅을 기록할 때 입력한 텍스트는 구조화된 정보 추출을 위해 AI 서비스(Anthropic Claude)로 전송됩니다. 이 텍스트는 서비스 제공 목적으로만 처리되며 AI 모델 훈련에 사용되지 않습니다.",
+    en: "When you log a meeting, the text you provide is sent to an AI service (Gemini) to extract structured information. This text is processed to provide the service and is not used to train AI models.",
+    ko: "미팅을 기록할 때 입력한 텍스트는 구조화된 정보 추출을 위해 AI 서비스(Gemini)로 전송됩니다. 이 텍스트는 서비스 제공 목적으로만 처리되며 AI 모델 훈련에 사용되지 않습니다.",
   },
   "privacy.calendar.title": { en: "Google Calendar", ko: "구글 캘린더" },
   "privacy.calendar.body": {
