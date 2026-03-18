@@ -286,8 +286,8 @@ const keys: Translations = {
   },
   "child.reporting.title": { en: "Reporting Mechanism", ko: "신고 방법" },
   "child.reporting.body": {
-    en: "Users can report child safety concerns directly in the app. If you encounter any content or behavior that may endanger a child, please contact us immediately at support@rememberone.app. All reports are reviewed promptly.",
-    ko: "사용자는 앱에서 직접 아동 안전 우려 사항을 신고할 수 있습니다. 아동을 위험에 빠뜨릴 수 있는 콘텐츠나 행동을 발견하면 즉시 support@rememberone.app으로 연락해 주세요. 모든 신고는 신속하게 검토됩니다.",
+    en: "Users can report child safety concerns directly in the app. If you encounter any content or behavior that may endanger a child, please contact us immediately at comgamemarre@gmail.com. All reports are reviewed promptly.",
+    ko: "사용자는 앱에서 직접 아동 안전 우려 사항을 신고할 수 있습니다. 아동을 위험에 빠뜨릴 수 있는 콘텐츠나 행동을 발견하면 즉시 comgamemarre@gmail.com으로 연락해 주세요. 모든 신고는 신속하게 검토됩니다.",
   },
   "child.compliance.title": { en: "Compliance", ko: "법적 준수" },
   "child.compliance.body": {
