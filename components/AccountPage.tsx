@@ -201,7 +201,7 @@ export function AccountPage({ user }: Props) {
           </ol>
 
           <a
-            href="mailto:support@rememberone.app"
+            href="mailto:comgamemarre@gmail.com"
             className="flex items-center gap-2 mt-3 h-11 px-4 rounded-[8px_2px_8px_2px] text-sm font-medium border transition-opacity active:opacity-80"
             style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
           >
