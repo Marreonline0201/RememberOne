@@ -222,15 +222,15 @@ export function AddNotesInput({ personId, personName }: Props) {
           </button>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className={`text-xs ${text.length >= 3800 ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
             {text.length}/4000 characters
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <Button type="button" variant="ghost" size="sm" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={!text.trim() || loading} className="gap-2">
+            <Button type="submit" size="sm" disabled={!text.trim() || loading} className="gap-2 whitespace-nowrap">
               {loading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

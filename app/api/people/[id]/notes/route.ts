@@ -82,8 +82,10 @@ export async function POST(request: Request, { params }: Params) {
         .ilike("name", fm.name)
         .maybeSingle();
 
-      // 2. If no match, look for a placeholder with the same relation to merge into
-      if (!existingFm) {
+      // 2. If no match, look for a placeholder with the same relation to merge into.
+      //    Only attempt this when the incoming name is a real name (not itself a placeholder),
+      //    otherwise numbered placeholders ("Son 1", "Son 2") would overwrite each other.
+      if (!existingFm && !isRelationPlaceholder(fm.name, fm.relation)) {
         const { data: sameRelation } = await supabase
           .from("family_members")
           .select("id, name")
