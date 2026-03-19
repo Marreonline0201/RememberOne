@@ -119,13 +119,13 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
         });
       }
 
-      toast({ title: "Updated" });
+      toast({ title: language === "ko" ? "저장됨" : "Updated" });
       setEditing(false);
       router.refresh();
     } catch (err: unknown) {
       toast({
-        title: "Failed to update",
-        description: err instanceof Error ? err.message : "Something went wrong",
+        title: language === "ko" ? "저장 실패" : "Failed to update",
+        description: err instanceof Error ? err.message : language === "ko" ? "문제가 발생했어요" : "Something went wrong",
         variant: "destructive",
       });
     } finally {
@@ -154,12 +154,12 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Delete failed");
-      toast({ title: `${familyMember.name} removed` });
+      toast({ title: language === "ko" ? `${familyMember.name} 삭제됨` : `${familyMember.name} removed` });
       router.refresh();
     } catch (err: unknown) {
       toast({
-        title: "Failed to delete",
-        description: err instanceof Error ? err.message : "Something went wrong",
+        title: language === "ko" ? "삭제 실패" : "Failed to delete",
+        description: err instanceof Error ? err.message : language === "ko" ? "문제가 발생했어요" : "Something went wrong",
         variant: "destructive",
       });
       setDeleting(false);
@@ -175,20 +175,20 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Name"
+              placeholder={language === "ko" ? "이름" : "Name"}
               className="h-9 text-sm"
               autoFocus
             />
             <Input
               value={relation}
               onChange={(e) => setRelation(e.target.value)}
-              placeholder="Relation (e.g. son, wife)"
+              placeholder={language === "ko" ? "관계 (예: 아들, 딸, 배우자)" : "Relation (e.g. son, wife)"}
               className="h-9 text-sm"
             />
             <Input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notes (optional)"
+              placeholder={language === "ko" ? "메모 (선택)" : "Notes (optional)"}
               className="h-9 text-sm"
             />
 
@@ -311,7 +311,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
 
             {confirmDelete && !deleting && (
               <p className="text-xs text-destructive font-medium">
-                Tap the trash icon again to confirm deletion.
+                {language === "ko" ? "휴지통 아이콘을 한 번 더 눌러 삭제를 확인하세요." : "Tap the trash icon again to confirm deletion."}
               </p>
             )}
 

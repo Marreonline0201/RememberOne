@@ -18,12 +18,20 @@ function buildExtractionPrompt(language: "en" | "ko", existingPeopleNames: strin
   const isKorean = language === "ko";
 
   const keyLanguageRule = isKorean
-    ? `- Attribute keys must be human-readable labels IN KOREAN: "직업", "회사", "대학교", "학교", "취미", "도시", "나이", "전화번호", "이메일", "링크드인" etc.`
+    ? `- Attribute keys must be human-readable labels IN KOREAN: "직업", "회사", "대학교", "학교", "학년", "취미", "도시", "나이", "전화번호", "이메일", "링크드인" etc. Use "학년" for school grade/year (e.g. "중학교 2학년", "초등학교 6학년").`
     : `- Attribute keys must be human-readable labels in English Title Case: "Job Title", "Company", "University", "Hobby", "City", "Age", "Phone", "Email", "LinkedIn", etc.`;
 
   const summaryLanguageRule = isKorean
     ? `- "summary" must be written in Korean.`
     : `- "summary" must be written in English.`;
+
+  const unnamedMemberRule = isKorean
+    ? `- CRITICAL — unnamed family members: 이름을 모르는 가족은 관계명을 한국어 플레이스홀더로 사용하세요. 한 명이면 관계명만 (예: "아들", "딸"). 같은 관계가 여러 명이면 번호를 붙이세요 (예: "아들 1", "아들 2", "딸 1", "딸 2"). 절대 개수를 attribute로 저장하지 마세요 (예: { "key": "아들 수", "value": "2" } 금지). 예시: "아들이 두 명" → [{ "name": "아들 1", "relation": "son", "attributes": [] }, { "name": "아들 2", "relation": "son", "attributes": [] }].`
+    : `- CRITICAL — unnamed family members: If a family member is mentioned but has no name, still add them to "family_members" with a placeholder name. For a single unnamed member use the relation capitalized (e.g. "Son", "Daughter"). For multiple unnamed members of the same relation, number them (e.g. "Son 1", "Son 2", "Son 3"). NEVER store the count as an attribute (e.g. do NOT output { "key": "Daughters", "value": "3" }). Example: "Mike has 3 daughters" → family_members: [{ "name": "Daughter 1", "relation": "daughter", "attributes": [] }, { "name": "Daughter 2", "relation": "daughter", "attributes": [] }, { "name": "Daughter 3", "relation": "daughter", "attributes": [] }].`;
+
+  const educationRule = isKorean
+    ? `- KOREAN EDUCATION: 초등학교 6년 (1~6학년), 중학교 3년 (1~3학년), 고등학교 3년 (1~3학년). 학년 언급 시 key "학년", value에 전체 표현 저장 (예: "중학교 2학년", "초등학교 6학년").`
+    : "";
 
   const existingPeopleSection =
     existingPeopleNames.length > 0
@@ -67,7 +75,8 @@ ${keyLanguageRule}
 ${summaryLanguageRule}
 - Attribute values must be concise strings.
 - Family member relations must be lowercase singular nouns: "son", "daughter", "spouse", "partner", "mother", "father", "brother", "sister", "cousin", "friend".
-- CRITICAL — unnamed family members: If a family member is mentioned but has no name, still add them to "family_members" with a placeholder name. For a single unnamed member use the relation capitalized (e.g. "Son", "Daughter"). For multiple unnamed members of the same relation, number them (e.g. "Son 1", "Son 2", "Son 3"). NEVER store the count as an attribute (e.g. do NOT output { "key": "Daughters", "value": "3" }). Example: "Mike has 3 daughters" → family_members: [{ "name": "Daughter 1", "relation": "daughter", "attributes": [] }, { "name": "Daughter 2", "relation": "daughter", "attributes": [] }, { "name": "Daughter 3", "relation": "daughter", "attributes": [] }].
+${unnamedMemberRule}
+${educationRule}
 - If the user mentions a date (e.g. "today", "yesterday", "last Tuesday", "오늘", "어제"), resolve it relative to today's date and output as YYYY-MM-DD. If no date is mentioned output null.
 - If you cannot determine a value with confidence, omit that attribute rather than guessing.
 - If no people are mentioned, return { "people": [], "meeting_date": null, "location": null }.`;
@@ -150,11 +159,17 @@ export async function extractAdditionalInfo(
 ): Promise<AdditionalExtractionResult> {
   const isKorean = language === "ko";
   const keyLanguageRule = isKorean
-    ? `- "attributes" keys must be in Korean: "직업", "회사", "취미", "도시", "나이", "학교", "대학교" etc.`
+    ? `- "attributes" keys must be in Korean: "직업", "회사", "취미", "도시", "나이", "학교", "학년", "대학교" etc. Use "학년" for school grade/year (e.g. "중학교 2학년", "초등학교 6학년").`
     : `- "attributes" keys must be in English Title Case: "Job Title", "Company", "Hobby", "City", "Age", etc.`;
   const summaryRule = isKorean
     ? `- "summary" must be written in Korean.`
     : `- "summary" must be written in English.`;
+  const unnamedMemberRule = isKorean
+    ? `- CRITICAL — unnamed family members: 이름을 모르는 가족은 관계명을 한국어 플레이스홀더로 사용하세요. 한 명이면 관계명만 (예: "아들", "딸"). 같은 관계가 여러 명이면 번호를 붙이세요 (예: "아들 1", "아들 2", "딸 1", "딸 2"). 절대 개수를 attribute로 저장하지 마세요. 예시: "아들이 두 명" → [{ "name": "아들 1", "relation": "son", "attributes": [] }, { "name": "아들 2", "relation": "son", "attributes": [] }].`
+    : `- CRITICAL — unnamed family members: If a family member is mentioned but has no name, still add them to "family_members" with a placeholder name. For a single unnamed member use the relation capitalized (e.g. "Son", "Daughter"). For multiple unnamed members of the same relation, number them (e.g. "Son 1", "Son 2", "Son 3"). NEVER store the count as an attribute (e.g. do NOT output { "key": "Daughters", "value": "3" }). Example: "Mike has 3 daughters" → family_members: [{ "name": "Daughter 1", "relation": "daughter", "attributes": [] }, { "name": "Daughter 2", "relation": "daughter", "attributes": [] }, { "name": "Daughter 3", "relation": "daughter", "attributes": [] }].`;
+  const educationRule = isKorean
+    ? `- KOREAN EDUCATION: 초등학교 6년 (1~6학년), 중학교 3년 (1~3학년), 고등학교 3년 (1~3학년). 학년 언급 시 key "학년", value에 전체 표현 저장 (예: "중학교 2학년", "초등학교 6학년").`
+    : "";
 
   const familyContext =
     existingFamilyMembers.length > 0
@@ -191,7 +206,8 @@ ${summaryRule}
 - CRITICAL — existing family members: If the notes mention an existing family member by name (listed above), add new facts about them as attributes under that family member. Do NOT create a new family member entry for them. Example: if "Bunny (daughter)" already exists and the note says "Bunny is in James Kindergarden", output Bunny in family_members with attribute { "key": "Kindergarten", "value": "James Kindergarden" } — NOT a new family member named James.
 - CRITICAL — names in place/school names: A name that appears as part of a school, institution, or place (e.g. "James Kindergarden", "St. Mary's School", "Lincoln Elementary") is NOT a person. Do not add it to family_members.
 - Only add NEW entries to "family_members" if the person is explicitly stated to be a relative of ${personName} (son, daughter, spouse, partner, sibling, parent, etc.) AND they are not already in the existing list above.
-- CRITICAL — unnamed family members: If a family member is mentioned but has no name, still add them to "family_members" with a placeholder name. For a single unnamed member use the relation capitalized (e.g. "Son", "Daughter"). For multiple unnamed members of the same relation, number them (e.g. "Son 1", "Son 2", "Son 3"). NEVER store the count as an attribute (e.g. do NOT output { "key": "Daughters", "value": "3" }). Example: "Mike has 3 daughters" → family_members: [{ "name": "Daughter 1", "relation": "daughter", "attributes": [] }, { "name": "Daughter 2", "relation": "daughter", "attributes": [] }, { "name": "Daughter 3", "relation": "daughter", "attributes": [] }].
+${unnamedMemberRule}
+${educationRule}
 - "meeting_date": ISO "YYYY-MM-DD" if a date is mentioned (including Korean date words like "오늘", "어제"), otherwise null.
 - "location": where the meeting/interaction happened, or null.
 - If no new info is found, return empty arrays and a summary saying so.`;
