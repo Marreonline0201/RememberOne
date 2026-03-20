@@ -38,7 +38,7 @@ export function AddFamilyMemberForm({ personId }: Props) {
       setName("");
       setRelation("");
       setNotes("");
-      setOpen(false);
+      // Keep the form open so another member can be added right away
       router.refresh();
     } catch (err: unknown) {
       toast({

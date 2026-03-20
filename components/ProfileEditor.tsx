@@ -1,16 +1,34 @@
 "use client";
 
 // ProfileEditor — editable list of key-value attributes for a person.
+// Keyframe injected once; Tailwind doesn't ship slide+fade out of the box.
+const injectKeyframe = (() => {
+  if (typeof document === "undefined") return () => {};
+  let injected = false;
+  return () => {
+    if (injected) return;
+    injected = true;
+    const style = document.createElement("style");
+    style.textContent = `
+      @keyframes slideInFade {
+        from { opacity: 0; transform: translateY(-8px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+    `;
+    document.head.appendChild(style);
+  };
+})();
 // Mobile-first: stacked key/value rows (full width each), large tap targets.
 // On md+ the key and value fields appear side-by-side.
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { Plus, Trash2, Save, Loader2, Undo2 } from "lucide-react";
 import type { PersonAttribute } from "@/types/database";
 
 interface Props {
@@ -24,6 +42,7 @@ interface LocalAttribute {
   key: string;
   value: string;
   dirty: boolean;
+  markedForDelete: boolean;
 }
 
 export function ProfileEditor({
@@ -31,8 +50,11 @@ export function ProfileEditor({
   initialAttributes,
   initialNotes,
 }: Props) {
+  injectKeyframe();
   const { toast } = useToast();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const newRowRef = useRef<HTMLDivElement>(null);
 
   const [notes, setNotes] = useState(initialNotes);
   const [notesDirty, setNotesDirty] = useState(false);
@@ -43,15 +65,53 @@ export function ProfileEditor({
       key: a.key,
       value: a.value,
       dirty: false,
+      markedForDelete: false,
     }))
   );
+
+  const [justAdded, setJustAdded] = useState(false);
 
   function addAttribute() {
     setAttributes((prev) => [
       ...prev,
-      { id: null, key: "", value: "", dirty: true },
+      { id: null, key: "", value: "", dirty: true, markedForDelete: false },
     ]);
+    setJustAdded(true);
   }
+
+  useEffect(() => {
+    if (!justAdded || !newRowRef.current) return;
+    setJustAdded(false);
+
+    const el = newRowRef.current;
+    const firstInput = el.querySelector("input") as HTMLInputElement | null;
+
+    // Smooth scroll with easing via rAF
+    const targetY =
+      el.getBoundingClientRect().top + window.scrollY - window.innerHeight / 2 + el.offsetHeight / 2;
+    const startY = window.scrollY;
+    const distance = targetY - startY;
+    const duration = 400; // ms
+    let start: number | null = null;
+
+    function easeInOut(t: number) {
+      return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    }
+
+    function step(timestamp: number) {
+      if (start === null) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(elapsed / duration, 1);
+      window.scrollTo(0, startY + distance * easeInOut(progress));
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        firstInput?.focus();
+      }
+    }
+
+    requestAnimationFrame(step);
+  }, [justAdded, attributes.length]);
 
   function updateAttribute(
     index: number,
@@ -65,12 +125,19 @@ export function ProfileEditor({
     );
   }
 
-  function removeAttribute(index: number) {
-    setAttributes((prev) => prev.filter((_, i) => i !== index));
+  function toggleDelete(index: number) {
+    setAttributes((prev) =>
+      prev.map((a, i) => {
+        if (i !== index) return a;
+        // Newly added + not yet saved: remove immediately (nothing to undo)
+        if (a.id === null) return null as unknown as LocalAttribute;
+        return { ...a, markedForDelete: !a.markedForDelete };
+      }).filter(Boolean) as LocalAttribute[]
+    );
   }
 
   async function handleSave() {
-    const invalid = attributes.some((a) => !a.key.trim() || !a.value.trim());
+    const invalid = attributes.some((a) => !a.markedForDelete && (!a.key.trim() || !a.value.trim()));
     if (invalid) {
       toast({
         title: "Please fill in all fields",
@@ -87,20 +154,27 @@ export function ProfileEditor({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             notes: notes || null,
-            attributes: attributes.map((a) => ({
-              key: a.key.trim(),
-              value: a.value.trim(),
-            })),
+            attributes: attributes
+              .filter((a) => !a.markedForDelete)
+              .map((a) => ({
+                key: a.key.trim(),
+                value: a.value.trim(),
+              })),
           }),
         });
 
         const json = await res.json();
         if (!res.ok || json.error) throw new Error(json.error);
 
-        setAttributes((prev) => prev.map((a) => ({ ...a, dirty: false })));
+        setAttributes((prev) =>
+          prev
+            .filter((a) => !a.markedForDelete)
+            .map((a) => ({ ...a, dirty: false }))
+        );
         setNotesDirty(false);
 
         toast({ title: "Saved", description: "Profile updated successfully." });
+        router.refresh();
       } catch (err: unknown) {
         toast({
           title: "Save failed",
@@ -115,7 +189,8 @@ export function ProfileEditor({
   const hasPendingChanges =
     notesDirty ||
     attributes.some((a) => a.dirty) ||
-    attributes.some((a) => a.id === null);
+    attributes.some((a) => a.id === null) ||
+    attributes.some((a) => a.markedForDelete);
 
   return (
     <div className="space-y-6">
@@ -173,35 +248,49 @@ export function ProfileEditor({
             */
             <div
               key={idx}
-              className="flex flex-col gap-2 md:flex-row md:items-start"
+              ref={idx === attributes.length - 1 ? newRowRef : undefined}
+              className="flex flex-col gap-2 md:flex-row md:items-start transition-opacity duration-200"
+              style={{
+                opacity: attr.markedForDelete ? 0.45 : 1,
+                ...(attr.id === null && idx === attributes.length - 1
+                  ? { animation: "slideInFade 0.3s ease-out both" }
+                  : {}),
+              }}
             >
               <Input
                 value={attr.key}
                 onChange={(e) => updateAttribute(idx, "key", e.target.value)}
                 placeholder="Label (e.g. Job Title)"
-                /*
-                  h-11 = 44px touch target.
-                  text-base prevents iOS zoom.
-                  md:flex-[2] gives the key field proportional width on desktop.
-                */
+                disabled={attr.markedForDelete}
                 className="h-11 text-base md:text-sm md:flex-[2]"
+                style={attr.markedForDelete ? { textDecoration: "line-through" } : undefined}
               />
               <Input
                 value={attr.value}
                 onChange={(e) => updateAttribute(idx, "value", e.target.value)}
                 placeholder="Value"
+                disabled={attr.markedForDelete}
                 className="h-11 text-base md:text-sm md:flex-[3]"
+                style={attr.markedForDelete ? { textDecoration: "line-through" } : undefined}
               />
-              {/* Delete — 44px tap target */}
+              {/* Delete / Undo — 44px tap target */}
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                onClick={() => removeAttribute(idx)}
-                className="h-11 w-11 text-muted-foreground hover:text-destructive shrink-0 self-end md:self-auto"
-                aria-label="Remove attribute"
+                onClick={() => toggleDelete(idx)}
+                className={`h-11 w-11 shrink-0 self-end md:self-auto ${
+                  attr.markedForDelete
+                    ? "text-amber-500 hover:text-amber-600"
+                    : "text-muted-foreground hover:text-destructive"
+                }`}
+                aria-label={attr.markedForDelete ? "Undo remove" : "Remove attribute"}
               >
-                <Trash2 className="w-4 h-4" />
+                {attr.markedForDelete ? (
+                  <Undo2 className="w-4 h-4" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
               </Button>
             </div>
           ))}
