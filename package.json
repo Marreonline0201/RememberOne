@@ -13,7 +13,6 @@
     "cap:ios": "npx cap open ios"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.3",
     "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/android": "^8.2.0",
     "@capacitor/app": "^8.0.1",

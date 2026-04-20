@@ -1,18 +1,62 @@
-/.claude
-/.env
-/.env.example
-/.env.local
-/Prompt.txt
+# =============================================================
+# RememberOne — .gitignore
+# Philosophy: track only what's needed to run the SaaS on Vercel.
+# Everything else (docs, secrets, build output, internal assets,
+# dev tools, mobile scaffolding) stays local.
+# =============================================================
+
+# ---- Secrets / environment ----
+.env
+.env.*
+
+# ---- Dependencies ----
+/node_modules/
+
+# ---- Build outputs & caches ----
+/.next/
+/out/
+/dist/
+/tsconfig.tsbuildinfo
+
+# ---- Mobile build scaffolding (regenerate via `npx cap sync`) ----
+/android/
+/ios/
+
+# ---- IDE / editor ----
+/.idea/
+/.vscode/
+/.cursor/
+
+# ---- Agent / tool artifacts ----
+/.claude/
+/.remember/
+/.vercel/
+
+# ---- Internal docs & changelogs (kept private) ----
 /SETUP.md
 /SPEC.md
-/supabase
-node_modules
-.next
-android
-ios
-/screenshots
-/screenshot.mjs
-/scripts
+/Prompt.txt
+/report.md
+/RELEASE_NOTES.md
 
-.vercel
-.env*.local
+# ---- Security audit tracker (internal) ----
+/security/
+
+# ---- Backend schema & migrations (kept private) ----
+/supabase/
+
+# ---- Product assets / captures not needed at runtime ----
+/Logo/
+/Googleplay/
+/error/
+/screenshots/
+
+# ---- Dev-only scripts & capture tools ----
+/scripts/
+/screenshot.mjs
+/figma-capture.mjs
+
+# ---- Misc ----
+*.log
+.DS_Store
+Thumbs.db
