@@ -1,5 +1,9 @@
 // GET /api/calendar/connect
-// Initiates Google OAuth flow — redirects user to Google's consent screen
+// Initiates Google OAuth flow — redirects user to Google's consent screen.
+//
+// CSRF: we mint a random `state` and bind it to the caller's browser via an
+// httpOnly cookie. `/api/calendar/callback` verifies the returned `state`
+// matches the cookie before exchanging the code.
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -17,12 +21,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Generate a CSRF state token that encodes the user ID
-  // We encode userId in state so the callback can identify the user
-  // In production you'd store state in a short-lived DB entry or signed JWT
-  const nonce = randomBytes(16).toString("hex");
-  const state = Buffer.from(JSON.stringify({ userId: user.id, nonce })).toString("base64url");
+  const state = randomBytes(32).toString("hex");
 
-  const authUrl = getAuthUrl(state);
-  return NextResponse.redirect(authUrl);
+  const response = NextResponse.redirect(getAuthUrl(state));
+  response.cookies.set("oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/",
+  });
+  return response;
 }

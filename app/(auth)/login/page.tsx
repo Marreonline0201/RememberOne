@@ -144,19 +144,12 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         {/* Branding */}
         <div className="flex flex-col items-center gap-2 text-center">
-          {/* Logo from Figma — person + pen tool */}
-          <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl shadow-md bg-white border border-gray-100">
+          {/* Brand logo — served from /public */}
+          <div className="flex items-center justify-center w-16 h-16 rounded-2xl shadow-md bg-white border border-gray-100">
             <img
-              src="https://www.figma.com/api/mcp/asset/d1762fb9-95a9-43ec-867e-5178b2708904"
-              alt=""
-              className="absolute w-8 h-8 object-contain"
-              style={{ top: "10px", left: "10px" }}
-            />
-            <img
-              src="https://www.figma.com/api/mcp/asset/c73891f6-398c-4d3b-8fa3-cd625031c03d"
-              alt=""
-              className="absolute w-6 h-6 object-contain"
-              style={{ bottom: "8px", right: "8px" }}
+              src="/logo.png"
+              alt="RememberOne logo"
+              className="w-12 h-12 object-contain"
             />
           </div>
           <h1 className="text-2xl font-normal text-black uppercase tracking-wider" style={{ fontFamily: "'Hammersmith One', sans-serif" }}>RememberOne</h1>

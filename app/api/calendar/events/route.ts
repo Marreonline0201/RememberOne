@@ -8,6 +8,7 @@ import { fetchUpcomingEvents } from "@/lib/google-calendar";
 import { getAllPeople } from "@/lib/people";
 import { getPersonFull } from "@/lib/people";
 import { eventMentionsPerson } from "@/lib/utils";
+import { decryptToken, decryptTokenOptional, encryptToken } from "@/lib/crypto";
 import type { PersonFull, UpcomingMeetingAlert } from "@/types/app";
 
 export async function GET() {
@@ -41,8 +42,8 @@ export async function GET() {
     let newAccessToken: string | null;
     try {
       ({ events, newAccessToken } = await fetchUpcomingEvents(
-        connection.access_token,
-        connection.refresh_token,
+        decryptToken(connection.access_token),
+        decryptTokenOptional(connection.refresh_token),
         connection.token_expiry,
         connection.calendar_id
       ));
@@ -65,11 +66,11 @@ export async function GET() {
       throw googleErr; // re-throw unexpected errors
     }
 
-    // If token was refreshed, update the DB
+    // If token was refreshed, update the DB (encrypted at rest)
     if (newAccessToken) {
       await supabase
         .from("calendar_connections")
-        .update({ access_token: newAccessToken })
+        .update({ access_token: encryptToken(newAccessToken) })
         .eq("id", connection.id);
     }
 

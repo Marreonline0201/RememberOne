@@ -1,52 +1,59 @@
 // GET /api/calendar/callback
 // Google redirects here after the user grants (or denies) calendar access.
-// Exchanges the authorization code for tokens and saves them to Supabase.
+// Exchanges the authorization code for tokens and saves them to Supabase,
+// scoped to the *authenticated* user — never a URL-supplied identifier.
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens } from "@/lib/google-calendar";
+import { encryptToken, encryptTokenOptional } from "@/lib/crypto";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
-  const error = searchParams.get("error");
+  const oauthError = searchParams.get("error");
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
-  // User denied access
-  if (error) {
-    return NextResponse.redirect(`${appUrl}/?calendar_error=${encodeURIComponent(error)}`);
+  if (oauthError) {
+    return NextResponse.redirect(
+      `${appUrl}/?calendar_error=${encodeURIComponent(oauthError)}`
+    );
   }
 
   if (!code || !state) {
     return NextResponse.redirect(`${appUrl}/?calendar_error=missing_params`);
   }
 
-  // Decode state to get userId
-  let userId: string;
-  try {
-    const decoded = JSON.parse(Buffer.from(state, "base64url").toString("utf-8"));
-    userId = decoded.userId;
-    if (!userId) throw new Error("No userId in state");
-  } catch {
+  // CSRF: the `state` in the query string must match the httpOnly cookie
+  // we set in /api/calendar/connect.
+  const expectedState = request.cookies.get("oauth_state")?.value;
+  if (!expectedState || expectedState !== state) {
     return NextResponse.redirect(`${appUrl}/?calendar_error=invalid_state`);
   }
 
+  // Authorization: derive the target user from the authenticated session,
+  // not from the URL. This is what prevents cross-user token poisoning.
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.redirect(`${appUrl}/login?calendar_error=session_expired`);
+  }
+
   try {
-    // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code);
 
-    // Use service client to write tokens (callback has no session cookie)
-    const supabase = createServiceClient();
-
-    await supabase.from("calendar_connections").upsert(
+    const { error: dbError } = await supabase.from("calendar_connections").upsert(
       {
-        user_id: userId,
+        user_id: user.id,
         provider: "google",
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
+        access_token: encryptToken(tokens.access_token),
+        refresh_token: encryptTokenOptional(tokens.refresh_token),
         token_expiry: tokens.expiry_date
           ? new Date(tokens.expiry_date).toISOString()
           : null,
@@ -56,7 +63,12 @@ export async function GET(request: NextRequest) {
       { onConflict: "user_id,provider" }
     );
 
-    return NextResponse.redirect(`${appUrl}/?calendar_connected=true`);
+    if (dbError) throw new Error(dbError.message);
+
+    const response = NextResponse.redirect(`${appUrl}/?calendar_connected=true`);
+    // Single-use CSRF token: clear the cookie once consumed.
+    response.cookies.delete("oauth_state");
+    return response;
   } catch (err: unknown) {
     console.error("[/api/calendar/callback]", err);
     return NextResponse.redirect(`${appUrl}/?calendar_error=token_exchange_failed`);
