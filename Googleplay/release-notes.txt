@@ -1,8 +1,0 @@
-Welcome to RememberOne!
-
-• Log people you meet by voice — AI extracts their name, job, school, interests, and family
-• View all your contacts in one place with key details at a glance
-• Get reminded before meetings with everything you need to know
-• Add and manage family members for each person
-• Connect Google Calendar to sync your upcoming meetings
-• Secure sign-in with Google or email
