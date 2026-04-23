@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
 
   const state = randomBytes(32).toString("hex");
 
-  const response = NextResponse.redirect(getAuthUrl(state));
+  // Derive the callback URL from the actual request so preview deployments,
+  // custom domains, and localhost all work without an env var.
+  const redirectUri = new URL("/api/calendar/callback", request.url).toString();
+
+  const response = NextResponse.redirect(getAuthUrl(state, redirectUri));
   response.cookies.set("oauth_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

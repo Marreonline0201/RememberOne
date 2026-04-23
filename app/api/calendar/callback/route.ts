@@ -15,23 +15,26 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const oauthError = searchParams.get("error");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+  // Origin derived from the request — works on localhost, custom domain,
+  // and Vercel preview URLs without any env var.
+  const origin = request.nextUrl.origin;
+  const redirectUri = `${origin}/api/calendar/callback`;
 
   if (oauthError) {
     return NextResponse.redirect(
-      `${appUrl}/?calendar_error=${encodeURIComponent(oauthError)}`
+      `${origin}/?calendar_error=${encodeURIComponent(oauthError)}`
     );
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${appUrl}/?calendar_error=missing_params`);
+    return NextResponse.redirect(`${origin}/?calendar_error=missing_params`);
   }
 
   // CSRF: the `state` in the query string must match the httpOnly cookie
   // we set in /api/calendar/connect.
   const expectedState = request.cookies.get("oauth_state")?.value;
   if (!expectedState || expectedState !== state) {
-    return NextResponse.redirect(`${appUrl}/?calendar_error=invalid_state`);
+    return NextResponse.redirect(`${origin}/?calendar_error=invalid_state`);
   }
 
   // Authorization: derive the target user from the authenticated session,
@@ -42,11 +45,11 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(`${appUrl}/login?calendar_error=session_expired`);
+    return NextResponse.redirect(`${origin}/login?calendar_error=session_expired`);
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    const tokens = await exchangeCodeForTokens(code, redirectUri);
 
     const { error: dbError } = await supabase.from("calendar_connections").upsert(
       {
@@ -65,12 +68,12 @@ export async function GET(request: NextRequest) {
 
     if (dbError) throw new Error(dbError.message);
 
-    const response = NextResponse.redirect(`${appUrl}/?calendar_connected=true`);
+    const response = NextResponse.redirect(`${origin}/?calendar_connected=true`);
     // Single-use CSRF token: clear the cookie once consumed.
     response.cookies.delete("oauth_state");
     return response;
   } catch (err: unknown) {
     console.error("[/api/calendar/callback]", err);
-    return NextResponse.redirect(`${appUrl}/?calendar_error=token_exchange_failed`);
+    return NextResponse.redirect(`${origin}/?calendar_error=token_exchange_failed`);
   }
 }

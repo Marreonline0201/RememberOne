@@ -8,20 +8,23 @@ const SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 
 // ============================================================
 // OAuth2 client factory
+// `redirectUri` is required for the auth-code flow (getAuthUrl /
+// exchangeCodeForTokens) and must match what's in Google Cloud Console.
+// Refresh & event calls don't use it, so it stays optional.
 // ============================================================
 export function createOAuth2Client(redirectUri?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID!,
     process.env.GOOGLE_CLIENT_SECRET!,
-    redirectUri ?? `${process.env.NEXT_PUBLIC_APP_URL}/api/calendar/callback`
+    redirectUri
   );
 }
 
 // ============================================================
 // Generate the Google authorization URL
 // ============================================================
-export function getAuthUrl(state: string): string {
-  const oauth2Client = createOAuth2Client();
+export function getAuthUrl(state: string, redirectUri: string): string {
+  const oauth2Client = createOAuth2Client(redirectUri);
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
@@ -33,13 +36,16 @@ export function getAuthUrl(state: string): string {
 // ============================================================
 // Exchange an authorization code for tokens
 // ============================================================
-export async function exchangeCodeForTokens(code: string): Promise<{
+export async function exchangeCodeForTokens(
+  code: string,
+  redirectUri: string
+): Promise<{
   access_token: string;
   refresh_token: string | null;
   expiry_date: number | null;
   scope: string;
 }> {
-  const oauth2Client = createOAuth2Client();
+  const oauth2Client = createOAuth2Client(redirectUri);
   const { tokens } = await oauth2Client.getToken(code);
 
   return {
