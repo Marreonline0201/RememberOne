@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { extractPeopleFromText } from "@/lib/gemini";
 import { saveExtractionResult, getAllPeople } from "@/lib/people";
+import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { todayISO } from "@/lib/utils";
 import { z } from "zod";
 
@@ -23,6 +24,18 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 1a. Rate limit (per-user, sliding window)
+    const rl = await consumeAIRateLimit(supabase);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        {
+          data: null,
+          error: "Too many requests. Please wait a moment and try again.",
+        },
+        { status: 429, headers: rateLimitHeaders(rl) }
+      );
     }
 
     // 2. Validate request body

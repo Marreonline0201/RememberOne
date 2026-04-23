@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getPersonFull } from "@/lib/people";
 import { extractAdditionalInfo } from "@/lib/gemini";
+import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { todayISO, isRelationPlaceholder } from "@/lib/utils";
 import { z } from "zod";
 
@@ -28,6 +29,18 @@ export async function POST(request: Request, { params }: Params) {
 
     if (!user) {
       return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit AI calls per-user (shared budget with /api/ai/extract)
+    const rl = await consumeAIRateLimit(supabase);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        {
+          data: null,
+          error: "Too many requests. Please wait a moment and try again.",
+        },
+        { status: 429, headers: rateLimitHeaders(rl) }
+      );
     }
 
     // Verify person exists and belongs to this user
