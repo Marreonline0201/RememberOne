@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { clearNativeSession } from "@/lib/native-auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -38,6 +39,7 @@ export function AccountPage({ user }: Props) {
   async function handleSignOut() {
     setSigningOut(true);
     await supabase.auth.signOut();
+    await clearNativeSession();
     router.push("/login");
     router.refresh();
   }

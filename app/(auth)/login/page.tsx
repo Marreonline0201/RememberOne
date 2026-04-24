@@ -3,6 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  persistNativeSession,
+  restoreNativeSession,
+} from "@/lib/native-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +33,20 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    // On native only: try to rehydrate a session from Capacitor Preferences.
+    // Cookies don't reliably persist across app kills in the Android WebView,
+    // so we keep a copy of the refresh token natively and re-exchange it on
+    // each launch. If it works, jump straight into the app.
+    (async () => {
+      const restored = await restoreNativeSession(supabase);
+      if (restored) {
+        router.push("/");
+        router.refresh();
+      }
+    })();
+  }, [router, supabase]);
 
   useEffect(() => {
     // On native: listen for the deep link callback after Google OAuth
@@ -62,8 +80,12 @@ export default function LoginPage() {
               throw new Error("Callback URL did not contain a code.");
             }
 
-            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
             if (error) throw error;
+
+            // Mirror the session into Capacitor Preferences so next launch
+            // can rehydrate without forcing a re-login.
+            await persistNativeSession(data.session);
 
             router.push("/");
             router.refresh();
@@ -148,11 +170,12 @@ export default function LoginPage() {
             "We sent you a confirmation link. Click it to activate your account.",
         });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        await persistNativeSession(data.session);
         router.push("/");
         router.refresh();
       }
