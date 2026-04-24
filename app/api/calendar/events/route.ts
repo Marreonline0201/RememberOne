@@ -108,7 +108,7 @@ export async function GET() {
       if (matchedPeopleIds.length > 0) {
         // Fetch full profiles for matched people
         const matchedPeopleFull = await Promise.all(
-          matchedPeopleIds.map((id) => getPersonFull(supabase, id))
+          matchedPeopleIds.map((id) => getPersonFull(supabase, id, user.id))
         );
 
         alerts.push({

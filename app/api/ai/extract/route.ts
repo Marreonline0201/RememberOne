@@ -83,13 +83,7 @@ export async function POST(request: Request) {
   } catch (err: unknown) {
     console.error("[/api/ai/extract]", err);
     return NextResponse.json(
-      {
-        data: null,
-        error:
-          err instanceof Error
-            ? err.message
-            : "An unexpected error occurred",
-      },
+      { data: null, error: "Failed to extract" },
       { status: 500 }
     );
   }

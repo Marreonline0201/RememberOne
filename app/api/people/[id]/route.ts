@@ -35,14 +35,9 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
     }
 
-    const person = await getPersonFull(supabase, params.id);
+    const person = await getPersonFull(supabase, params.id, user.id);
     if (!person) {
       return NextResponse.json({ data: null, error: "Not found" }, { status: 404 });
-    }
-
-    // RLS already enforces ownership, but double-check
-    if (person.user_id !== user.id) {
-      return NextResponse.json({ data: null, error: "Forbidden" }, { status: 403 });
     }
 
     return NextResponse.json({ data: person, error: null });
@@ -102,7 +97,7 @@ export async function PUT(request: Request, { params }: Params) {
       }
     }
 
-    const updatedPerson = await getPersonFull(supabase, params.id);
+    const updatedPerson = await getPersonFull(supabase, params.id, user.id);
     return NextResponse.json({ data: updatedPerson, error: null });
   } catch (err: unknown) {
     console.error("[PUT /api/people/[id]]", err);

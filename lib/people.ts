@@ -7,16 +7,21 @@ import type { Person, PersonAttribute, FamilyMember, FamilyMemberAttribute, Meet
 import { isRelationPlaceholder } from "@/lib/utils";
 
 // ============================================================
-// Fetch a single person with all nested data
+// Fetch a single person with all nested data.
+// userId is required so ownership is enforced in-query, not left to RLS —
+// defense-in-depth against a future caller accidentally passing a
+// service-role client.
 // ============================================================
 export async function getPersonFull(
   supabase: SupabaseClient,
-  personId: string
+  personId: string,
+  userId: string
 ): Promise<PersonFull | null> {
   const { data: person, error } = await supabase
     .from("people")
     .select("*")
     .eq("id", personId)
+    .eq("user_id", userId)
     .single();
 
   if (error || !person) return null;

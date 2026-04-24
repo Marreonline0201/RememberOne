@@ -44,12 +44,9 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     // Verify person exists and belongs to this user
-    const person = await getPersonFull(supabase, params.id);
+    const person = await getPersonFull(supabase, params.id, user.id);
     if (!person) {
       return NextResponse.json({ data: null, error: "Person not found" }, { status: 404 });
-    }
-    if (person.user_id !== user.id) {
-      return NextResponse.json({ data: null, error: "Forbidden" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -165,7 +162,7 @@ export async function POST(request: Request, { params }: Params) {
       .eq("id", params.id);
 
     // Return the fully updated person
-    const updated = await getPersonFull(supabase, params.id);
+    const updated = await getPersonFull(supabase, params.id, user.id);
     return NextResponse.json({
       data: {
         person: updated,
@@ -180,10 +177,7 @@ export async function POST(request: Request, { params }: Params) {
   } catch (err: unknown) {
     console.error("[POST /api/people/[id]/notes]", err);
     return NextResponse.json(
-      {
-        data: null,
-        error: err instanceof Error ? err.message : "An unexpected error occurred",
-      },
+      { data: null, error: "Failed to update notes" },
       { status: 500 }
     );
   }

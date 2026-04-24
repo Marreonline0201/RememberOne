@@ -22,7 +22,8 @@ const config: CapacitorConfig = {
     },
   },
   android: {
-    allowMixedContent: true,
+    // No HTTP subresources on any page we load — enforce HTTPS-only.
+    allowMixedContent: false,
   },
   ios: {
     contentInset: "always",

@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.rememberone.app",
+      "sha256_cert_fingerprints": [
+        "F3:0B:05:59:93:35:99:EE:F2:D5:D6:68:F5:96:10:CF:B2:4F:F2:5B:BE:39:40:A8:5A:7B:5F:71:85:2D:3E:67",
+        "70:21:B3:DA:99:95:82:31:21:88:A6:EE:F7:83:66:8E:A3:6F:8D:44:A1:5C:87:0C:0C:4E:73:02:58:83:07:44"
+      ]
+    }
+  }
+]

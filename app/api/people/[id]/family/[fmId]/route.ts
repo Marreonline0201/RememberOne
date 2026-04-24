@@ -54,7 +54,7 @@ export async function PATCH(request: Request, { params }: Params) {
   } catch (err: unknown) {
     console.error("[PATCH /api/people/[id]/family/[fmId]]", err);
     return NextResponse.json(
-      { data: null, error: err instanceof Error ? err.message : "Failed to update family member" },
+      { data: null, error: "Failed to update family member" },
       { status: 500 }
     );
   }
@@ -99,7 +99,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   } catch (err: unknown) {
     console.error("[DELETE /api/people/[id]/family/[fmId]]", err);
     return NextResponse.json(
-      { data: null, error: err instanceof Error ? err.message : "Failed to delete family member" },
+      { data: null, error: "Failed to delete family member" },
       { status: 500 }
     );
   }

@@ -57,7 +57,7 @@ export async function POST(request: Request, { params }: Params) {
   } catch (err: unknown) {
     console.error("[POST /api/people/[id]/family]", err);
     return NextResponse.json(
-      { data: null, error: err instanceof Error ? err.message : "Failed to add family member" },
+      { data: null, error: "Failed to add family member" },
       { status: 500 }
     );
   }

@@ -42,7 +42,12 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function PersonPage({ params }: Props) {
   const supabase = createClient();
-  const person = await getPersonFull(supabase, params.id);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) notFound();
+
+  const person = await getPersonFull(supabase, params.id, user.id);
   if (!person) notFound();
 
   const mainInfo = person.attributes.filter((a) => !isInterest(a.key));

@@ -1,0 +1,30 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img "RememberOne logo" [ref=e6]
+      - heading "RememberOne" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Never forget a person you meet
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - heading "Sign in" [level=3] [ref=e11]
+        - paragraph [ref=e12]: Welcome back. Sign in to your account.
+      - generic [ref=e13]:
+        - button "Continue with Google" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+          - text: Continue with Google
+        - generic [ref=e24]: or
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - text: Email
+            - textbox "Email" [ref=e27]:
+              - /placeholder: you@example.com
+          - generic [ref=e28]:
+            - text: Password
+            - textbox "Password" [ref=e29]:
+              - /placeholder: ""
+          - button "Sign in" [ref=e30] [cursor=pointer]
+        - paragraph [ref=e31]:
+          - text: Don't have an account?
+          - button "Sign up" [ref=e32] [cursor=pointer]
+  - region "Notifications (F8)":
+    - list

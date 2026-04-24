@@ -40,8 +40,20 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Public paths that do not require authentication
-  const publicPaths = ["/login", "/auth/callback"];
+  // Public paths that do not require authentication.
+  // /privacy, /child-safety, /account-deletion must be reachable without
+  // signing in per Google Play's Data Safety / policy-page requirements.
+  // /.well-known must be reachable without signing in so Google's App Links
+  // crawler can fetch /.well-known/assetlinks.json to verify the Android
+  // package ↔ domain binding (P1-02).
+  const publicPaths = [
+    "/login",
+    "/auth/callback",
+    "/privacy",
+    "/child-safety",
+    "/account-deletion",
+    "/.well-known",
+  ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   // Redirect unauthenticated users to /login (return 401 for API routes)

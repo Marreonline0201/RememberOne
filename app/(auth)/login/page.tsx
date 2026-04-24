@@ -7,6 +7,7 @@ import {
   persistNativeSession,
   restoreNativeSession,
 } from "@/lib/native-auth";
+import { PASSWORD_POLICY, validatePassword } from "@/lib/password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +56,15 @@ export default function LoginPage() {
       if (!Capacitor.isNativePlatform()) return;
       import("@capacitor/app").then(({ App }) => {
         const handle = App.addListener("appUrlOpen", async ({ url }) => {
-          if (!url.startsWith("com.rememberone.app://")) return;
+          // Accept both legacy custom-scheme callbacks and verified
+          // Android App Links hitting /auth/callback. The App Links route
+          // is the preferred one (P1-02) — the custom scheme stays as
+          // fallback until assetlinks.json verification is confirmed.
+          const isCustomScheme = url.startsWith("com.rememberone.app://");
+          const isAppLink = url.startsWith(
+            "https://rememberone.online/auth/callback"
+          );
+          if (!isCustomScheme && !isAppLink) return;
 
           // Close the system browser / Custom Tab so the user returns to the app view.
           try {
@@ -155,6 +164,20 @@ export default function LoginPage() {
 
     try {
       if (mode === "signup") {
+        // Client-side mirror of the Supabase Auth password policy. Server is
+        // the source of truth, but catching weak passwords here gives a
+        // specific error message instead of Supabase's generic one.
+        const pwCheck = validatePassword(password);
+        if (!pwCheck.ok) {
+          toast({
+            title: "Password too weak",
+            description: pwCheck.reason,
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -318,11 +341,17 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder={mode === "signup" ? "At least 8 characters" : ""}
+                  placeholder={
+                    mode === "signup"
+                      ? `At least ${PASSWORD_POLICY.minLength} characters, 1 letter + 1 number`
+                      : ""
+                  }
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={mode === "signup" ? 8 : undefined}
+                  minLength={
+                    mode === "signup" ? PASSWORD_POLICY.minLength : undefined
+                  }
                   autoComplete={
                     mode === "signin" ? "current-password" : "new-password"
                   }
