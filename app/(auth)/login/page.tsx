@@ -38,19 +38,53 @@ export default function LoginPage() {
       import("@capacitor/app").then(({ App }) => {
         const handle = App.addListener("appUrlOpen", async ({ url }) => {
           if (!url.startsWith("com.rememberone.app://")) return;
-          const urlObj = new URL(url.replace("com.rememberone.app://", "https://placeholder/"));
-          const code = urlObj.searchParams.get("code");
-          if (code) {
-            await supabase.auth.exchangeCodeForSession(code);
+
+          // Close the system browser / Custom Tab so the user returns to the app view.
+          try {
+            const { Browser } = await import("@capacitor/browser");
+            await Browser.close();
+          } catch {
+            // Plugin may not be available; safe to ignore.
+          }
+
+          try {
+            const urlObj = new URL(
+              url.replace("com.rememberone.app://", "https://placeholder/")
+            );
+            const code = urlObj.searchParams.get("code");
+            const errParam = urlObj.searchParams.get("error_description") ??
+              urlObj.searchParams.get("error");
+
+            if (errParam) {
+              throw new Error(decodeURIComponent(errParam));
+            }
+            if (!code) {
+              throw new Error("Callback URL did not contain a code.");
+            }
+
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) throw error;
+
             router.push("/");
             router.refresh();
+          } catch (err: unknown) {
+            console.error("[deep-link login] exchange failed:", err);
+            toast({
+              title: "Sign-in failed",
+              description:
+                err instanceof Error
+                  ? err.message
+                  : "Could not complete Google sign-in on the app.",
+              variant: "destructive",
+            });
+            setGoogleLoading(false);
           }
         });
         cleanup = () => handle.then((h) => h.remove());
       });
     });
     return () => cleanup?.();
-  }, [router, supabase]);
+  }, [router, supabase, toast]);
 
   async function handleGoogleSignIn() {
     setGoogleLoading(true);
