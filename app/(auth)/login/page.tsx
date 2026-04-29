@@ -122,11 +122,16 @@ export default function LoginPage() {
     try {
       const { Capacitor } = await import("@capacitor/core");
       if (Capacitor.isNativePlatform()) {
-        // Native: open in system browser to avoid Google's WebView block
+        // Native: open in system browser to avoid Google's WebView block.
+        // redirectTo uses the verified Android App Link (P1-02): Android
+        // routes the HTTPS callback to this app via the autoVerify intent
+        // filter in AndroidManifest.xml + /.well-known/assetlinks.json.
+        // The legacy custom-scheme fallback intent filter is kept in the
+        // manifest until v8+ has rolled out everywhere.
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: "com.rememberone.app://login-callback",
+            redirectTo: "https://rememberone.online/auth/callback",
             skipBrowserRedirect: true,
           },
         });
