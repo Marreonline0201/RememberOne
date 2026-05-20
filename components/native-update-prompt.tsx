@@ -42,11 +42,11 @@ export function NativeUpdatePrompt() {
         shownRef.current = true;
         toast({
           // Branded container: matches the lavender card gradient used
-          // throughout the app (52deg #d0f2ff → #dccaff), asymmetric
-          // 10/2 corner radius, no default border, soft shadow.
-          className: "border-0 shadow-md",
+          // throughout the app. The `update-prompt-attention` class (in
+          // app/globals.css) layers a slow shimmer + glow pulse for
+          // attention. Both animations respect prefers-reduced-motion.
+          className: "border-0 update-prompt-attention",
           style: {
-            background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
             borderRadius: "10px 2px 10px 2px",
           },
           title: (
