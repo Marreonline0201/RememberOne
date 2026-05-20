@@ -132,39 +132,44 @@ body {
 }
 
 /* ── Attention animations for the in-app update prompt ─────────────────── */
-/* Used by components/native-update-prompt.tsx. Two layered animations:
-   (1) a slow gradient slide so the lavender card surface visibly shimmers,
-   (2) a soft purple glow that breathes in/out so the whole toast feels
-   alive without being alarming. Both respect prefers-reduced-motion. */
+/* Used by components/native-update-prompt.tsx. Two layered animations
+   designed to be noticeable without being annoying:
+     (1) a horizontal gradient sweep with a saturated purple band that
+         continuously moves across the card surface,
+     (2) a purple box-shadow that breathes in/out so the whole toast
+         feels alive even peripheral-vision.
+   Both respect prefers-reduced-motion. */
 @keyframes update-prompt-shimmer {
-  0%, 100% {
-    background-position: 0% 50%;
+  0% {
+    background-position: 200% 50%;
   }
-  50% {
-    background-position: 100% 50%;
+  100% {
+    background-position: -200% 50%;
   }
 }
 
 @keyframes update-prompt-glow {
   0%, 100% {
-    box-shadow: 0 4px 14px 0 rgba(72, 45, 124, 0.18);
+    box-shadow: 0 4px 14px 0 rgba(72, 45, 124, 0.22);
   }
   50% {
-    box-shadow: 0 6px 24px 2px rgba(72, 45, 124, 0.38);
+    box-shadow: 0 8px 32px 4px rgba(72, 45, 124, 0.55);
   }
 }
 
 .update-prompt-attention {
   background-image: linear-gradient(
-    52deg,
+    90deg,
     #d0f2ff 0%,
-    #dccaff 50%,
+    #dccaff 25%,
+    #c4a5ff 50%,
+    #dccaff 75%,
     #d0f2ff 100%
   );
-  background-size: 200% 200%;
+  background-size: 300% 100%;
   animation:
-    update-prompt-shimmer 4s ease-in-out infinite,
-    update-prompt-glow 2.5s ease-in-out infinite;
+    update-prompt-shimmer 2.5s linear infinite,
+    update-prompt-glow 2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
