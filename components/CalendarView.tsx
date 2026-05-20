@@ -8,6 +8,7 @@ import Link from "next/link";
 import { formatDate, formatRelativeDate, localizeKey } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
+import { RecapLine } from "@/components/RecapLine";
 import type { PersonFull, UpcomingMeetingAlert as UpcomingAlertType } from "@/types/app";
 
 interface CalendarEntry {
@@ -407,11 +408,14 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
                         </div>
                       )}
 
-                      {/* Last meeting summary */}
+                      {/* Last meeting summary — auto-translated to the
+                          current app language by RecapLine. */}
                       {lastMeeting?.summary && (
-                        <p className="text-[11px] mt-2 line-clamp-2" style={{ color: "#5e7983" }}>
-                          {lastMeeting.summary}
-                        </p>
+                        <RecapLine
+                          summary={lastMeeting.summary}
+                          className="text-[11px] mt-2 line-clamp-2"
+                          style={{ color: "#5e7983" }}
+                        />
                       )}
                     </Link>
                   );
@@ -475,9 +479,11 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
                     )}
 
                     {summary && (
-                      <p className="text-[11px] mt-2 line-clamp-2" style={{ color: "#5e7983" }}>
-                        {summary}
-                      </p>
+                      <RecapLine
+                        summary={summary}
+                        className="text-[11px] mt-2 line-clamp-2"
+                        style={{ color: "#5e7983" }}
+                      />
                     )}
                   </Link>
                 );

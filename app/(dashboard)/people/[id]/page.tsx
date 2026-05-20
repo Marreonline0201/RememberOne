@@ -15,6 +15,7 @@ import { MeetingHistory } from "@/components/MeetingHistory";
 import { AttrChip } from "@/components/AttrChip";
 import { T } from "@/components/T";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RecapLine } from "@/components/RecapLine";
 import Link from "next/link";
 import { ArrowLeft, Mic } from "lucide-react";
 import { getInitials } from "@/lib/utils";
@@ -137,11 +138,14 @@ export default async function PersonPage({ params }: Props) {
         )}
 
         {/* Recap — most recent meeting's narrative summary. Captures events
-            and context that don't fit as structured attributes. */}
+            and context that don't fit as structured attributes. RecapLine
+            auto-translates to the current app language. */}
         {person.meetings.length > 0 && person.meetings[0].summary && (
-          <p className="mt-4 text-[12px] leading-snug italic" style={{ color: "#5e7983" }}>
-            {person.meetings[0].summary}
-          </p>
+          <RecapLine
+            summary={person.meetings[0].summary}
+            className="mt-4 text-[12px] leading-snug italic"
+            style={{ color: "#5e7983" }}
+          />
         )}
       </div>
 

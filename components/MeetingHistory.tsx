@@ -4,6 +4,7 @@ import { Calendar, MapPin } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
 import { formatDate, formatRelativeDate } from "@/lib/utils";
+import { RecapLine } from "@/components/RecapLine";
 import type { Meeting } from "@/types/database";
 
 interface Props {
@@ -54,9 +55,11 @@ export function MeetingHistory({ meetings }: Props) {
               )}
             </div>
             {m.summary && (
-              <p className="text-[12px] mt-1.5 leading-relaxed" style={{ color: "#284e72" }}>
-                {m.summary}
-              </p>
+              <RecapLine
+                summary={m.summary}
+                className="text-[12px] mt-1.5 leading-relaxed"
+                style={{ color: "#284e72" }}
+              />
             )}
           </div>
         ))}

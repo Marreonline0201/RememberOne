@@ -10,6 +10,7 @@ import { capitalize, localizeKey, localizeRelation, formatRelativeDate, asOfLabe
 import type { PersonFull } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
+import { RecapLine } from "@/components/RecapLine";
 
 const INTEREST_KEYS = ["interest", "hobby", "hobbies", "sport", "sports", "passion", "likes"];
 
@@ -141,14 +142,15 @@ export function PersonCard({ person }: Props) {
         )}
 
         {/* Recap — most recent meeting summary (events/narrative that don't
-            fit as structured attributes). Shown at the bottom of the card. */}
+            fit as structured attributes). Shown at the bottom of the card.
+            RecapLine auto-translates to the current app language and caches
+            the result in localStorage. */}
         {lastMeeting?.summary && (
-          <p
+          <RecapLine
+            summary={lastMeeting.summary}
             className="mt-4 text-[11px] leading-snug italic pr-8"
             style={{ color: "#5e7983" }}
-          >
-            {lastMeeting.summary}
-          </p>
+          />
         )}
       </Link>
 

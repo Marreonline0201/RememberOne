@@ -281,6 +281,38 @@ Extract new details about ${personName}. Respond with only the JSON object.`;
   return parsed;
 }
 
+// ── One-sentence recap translation ────────────────────────────────────────
+// Used by /api/ai/translate-summary. We store meeting summaries in whatever
+// language the user spoke at extraction time (English or Korean). When the
+// app's display language toggle disagrees with what's stored, we call this
+// to produce a parallel translation that we cache in localStorage on the
+// client — so subsequent toggles are instant.
+//
+// Constraints baked into the prompt:
+//   - Output stays a single sentence (matches the source shape).
+//   - No facts added or removed — pure translation.
+//   - Returns just the sentence (no quotes / markdown / preamble).
+export async function translateSummary(
+  text: string,
+  targetLang: "en" | "ko"
+): Promise<string> {
+  const prompt =
+    targetLang === "ko"
+      ? "다음 한 문장을 자연스러운 한국어로 번역하세요. 정확히 한 문장으로 유지하고, 사실을 추가하거나 삭제하지 마세요. 따옴표, 마크다운, 부연 설명 없이 번역된 문장만 반환하세요."
+      : "Translate the following one-sentence summary to natural English. Keep it as exactly one sentence. Do not add or remove any facts. Return only the translated sentence — no quotes, no markdown, no explanations.";
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: {
+      temperature: 0.0,
+      responseMimeType: "text/plain",
+    },
+  });
+
+  const result = await model.generateContent([prompt, text]);
+  return result.response.text().trim().slice(0, 1000);
+}
+
 // ── Audio transcription ───────────────────────────────────────────────────
 // Used by /api/ai/transcribe. Gemini 2.5 Flash accepts audio inputs natively
 // via inlineData parts. Returns just the raw verbatim transcript text.
