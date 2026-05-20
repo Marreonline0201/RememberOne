@@ -139,6 +139,17 @@ export function PersonCard({ person }: Props) {
             </div>
           </div>
         )}
+
+        {/* Recap — most recent meeting summary (events/narrative that don't
+            fit as structured attributes). Shown at the bottom of the card. */}
+        {lastMeeting?.summary && (
+          <p
+            className="mt-4 text-[11px] leading-snug italic pr-8"
+            style={{ color: "#5e7983" }}
+          >
+            {lastMeeting.summary}
+          </p>
+        )}
       </Link>
 
       {/* Mic — quick "log meeting with this person" */}

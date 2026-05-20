@@ -135,6 +135,14 @@ export default async function PersonPage({ params }: Props) {
             </div>
           </div>
         )}
+
+        {/* Recap — most recent meeting's narrative summary. Captures events
+            and context that don't fit as structured attributes. */}
+        {person.meetings.length > 0 && person.meetings[0].summary && (
+          <p className="mt-4 text-[12px] leading-snug italic" style={{ color: "#5e7983" }}>
+            {person.meetings[0].summary}
+          </p>
+        )}
       </div>
 
       {/* ── Log another meeting shortcut ──────────────────────────────── */}

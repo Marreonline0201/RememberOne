@@ -71,6 +71,17 @@ Rules:
 - CRITICAL — primary contacts only: Only add a person to the "people" array if the user explicitly says they met that person directly. People mentioned only as someone else's family member (e.g. "his son", "her mother", "their boss") must NOT appear in "people" — they belong only in the "family_members" array of the person who was directly met.
 - CRITICAL — same person across sentences: The user may speak in multiple short bursts. Treat all sentences as one continuous description. If sentences after the first refer to the same person using pronouns or omit the subject (especially in Korean), they all describe the most recently named person.
 - CRITICAL — name matching: If a person's name closely matches a name in the KNOWN PEOPLE list (same person, different romanization, or partial name), use the EXACT name from the known list.
+- CRITICAL — STABLE FACTS ONLY in "attributes": An attribute represents a STABLE characteristic of the person that doesn't change frequently and isn't tied to a specific date. Allowed attribute kinds: Job Title, Company, School, University, Major, Grade, City, Age, Phone, Email, LinkedIn, Hobby, Sport, Language, Religion. Their Korean equivalents are also allowed.
+- NEVER create an attribute for any of these — they must go in "summary" instead, as natural prose:
+  * Dated events or plans: "traveling June 1st", "wedding next month", "moving in summer", "interview tomorrow"
+  * Historical changes: "used to live in NY", "moved from LA to Seattle", "was an engineer before becoming a PM"
+  * Recent happenings: "got promoted last week", "had a baby", "just got married", "recently visited Japan"
+  * Emotional / momentary state: "seemed stressed", "was excited about work", "in a great mood today"
+  * Plans / intentions: "thinking about grad school", "plans to start a business"
+- "summary" must be a one-sentence natural-language recap mentioning the person's role plus any events, changes, plans, or context worth remembering. Examples:
+  * "John is a software engineer at Google who is traveling to Tokyo on June 1st."
+  * "Sarah moved from NY to LA last year and just got promoted to Senior Engineer."
+  * "Mike works at a startup and seemed stressed about an upcoming product launch."
 ${keyLanguageRule}
 ${summaryLanguageRule}
 - Attribute values must be concise strings.
@@ -203,6 +214,16 @@ ${familyContext}
 Rules:
 ${keyLanguageRule}
 ${summaryRule}
+- CRITICAL — STABLE FACTS ONLY in "attributes": An attribute represents a STABLE characteristic of the person that doesn't change frequently and isn't tied to a specific date. Allowed attribute kinds: Job Title, Company, School, University, Major, Grade, City, Age, Phone, Email, LinkedIn, Hobby, Sport, Language, Religion. Their Korean equivalents are also allowed.
+- NEVER create an attribute for any of these — they must go in "summary" instead, as natural prose:
+  * Dated events or plans: "traveling June 1st", "wedding next month", "moving in summer", "interview tomorrow"
+  * Historical changes: "used to live in NY", "moved from LA to Seattle", "was an engineer before becoming a PM"
+  * Recent happenings: "got promoted last week", "had a baby", "just got married", "recently visited Japan"
+  * Emotional / momentary state: "seemed stressed", "was excited about work", "in a great mood today"
+  * Plans / intentions: "thinking about grad school", "plans to start a business"
+- "summary" must be a one-sentence natural-language recap mentioning ${personName}'s situation and any events, changes, plans, or context worth remembering. Examples:
+  * "${personName} just got promoted to Senior Engineer and is traveling to Tokyo on June 1st."
+  * "${personName} moved from NY to LA last year and seemed excited about the new job."
 - CRITICAL — existing family members: If the notes mention an existing family member by name (listed above), add new facts about them as attributes under that family member. Do NOT create a new family member entry for them. Example: if "Bunny (daughter)" already exists and the note says "Bunny is in James Kindergarden", output Bunny in family_members with attribute { "key": "Kindergarten", "value": "James Kindergarden" } — NOT a new family member named James.
 - CRITICAL — names in place/school names: A name that appears as part of a school, institution, or place (e.g. "James Kindergarden", "St. Mary's School", "Lincoln Elementary") is NOT a person. Do not add it to family_members.
 - Only add NEW entries to "family_members" if the person is explicitly stated to be a relative of ${personName} (son, daughter, spouse, partner, sibling, parent, etc.) AND they are not already in the existing list above.
