@@ -103,21 +103,28 @@ export function ProfileEditor({
   const recDurationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recMaxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Web Speech API recognizer — mirrors the working pattern in
-  // ConversationInput.tsx exactly. MediaRecorder is authoritative; Web Speech
-  // is best-effort live preview. We deliberately do NOT auto-restart on end
-  // because that's what ConversationInput does and it works reliably on the
-  // same WebView. Audio capture continues regardless.
+  // Live preview is two-track:
+  //   - On Capacitor native (Android/iOS): @capacitor-community/speech-
+  //     recognition. Bridges to the native OS speech service which actually
+  //     works in WebView contexts. Diagnostic in this session showed
+  //     webkitSpeechRecognition's onresult NEVER fires inside the Android
+  //     WebView, so Web Speech is web-only.
+  //   - On the web: webkitSpeechRecognition (Chrome/Edge desktop). Same
+  //     pattern as ConversationInput.
+  // MediaRecorder is always the authoritative capture; live preview is
+  // best-effort feedback for the user while talking.
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const finalsRef = useRef<string[]>([]);
   // Mirror of livePartial state — used to recover the live transcript into
   // the notes textarea if Gemini's polish call fails on stop.
   const livePartialRef = useRef("");
-  // Temporary diagnostic — counts how many times `recognition.onresult` has
-  // fired during the current recording session. Lets us distinguish "Web
-  // Speech never delivers results" from "results arrive but state isn't
-  // updating". Reset on each startVoiceNote.
-  const [resultEventCount, setResultEventCount] = useState(0);
+  // Native plugin listener handles + tracking for clean teardown.
+  const nativePartialListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
+  const nativeStateListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
+  const nativeActiveRef = useRef(false);
+  // True while recording is still active — drives native auto-restart so
+  // listener closures always see the latest value.
+  const recordingRef = useRef(false);
 
   function setLivePartialSync(value: string) {
     livePartialRef.current = value;
@@ -137,11 +144,119 @@ export function ProfileEditor({
     }
   }
 
-  // ── Live preview via Web Speech API (best-effort) ───────────────────────
-  // 1:1 mirror of ConversationInput's working pattern. If the WebView
-  // doesn't support webkitSpeechRecognition we silently skip — MediaRecorder
-  // still captures audio and Gemini handles the final transcript on stop.
-  function startLivePreview() {
+  // ── Live preview entrypoint ──────────────────────────────────────────────
+  // Native plugin first on Capacitor; Web Speech fallback for web users.
+  async function startLivePreview() {
+    if (typeof window !== "undefined") {
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        if (Capacitor.isNativePlatform()) {
+          const ok = await startNativeLivePreview();
+          if (ok) return;
+        }
+      } catch (err) {
+        console.warn("[voice-note] Capacitor probe failed:", err);
+      }
+    }
+    startWebSpeechPreview();
+  }
+
+  // ── Native plugin path ───────────────────────────────────────────────────
+  // Returns true if the native path took ownership. False means probe
+  // failed and the caller should fall back to Web Speech.
+  async function startNativeLivePreview(): Promise<boolean> {
+    try {
+      const { SpeechRecognition: NativeSR } = await import(
+        "@capacitor-community/speech-recognition"
+      );
+      const availability = await NativeSR.available();
+      if (!availability.available) return false;
+
+      const perms = await NativeSR.checkPermissions();
+      if (perms.speechRecognition !== "granted") {
+        const req = await NativeSR.requestPermissions();
+        if (req.speechRecognition !== "granted") return true;
+      }
+
+      const partial = await NativeSR.addListener(
+        "partialResults",
+        (data: { matches?: string[] }) => {
+          const text = (data?.matches?.[0] ?? "").trim();
+          if (text) setLivePartialSync(text);
+        }
+      );
+      nativePartialListenerRef.current = partial;
+
+      // Android's SpeechRecognizer is one-shot per call. Re-arm on
+      // listeningState=stopped while still recording so the live preview
+      // survives natural speech pauses.
+      const stateListener = await NativeSR.addListener(
+        "listeningState",
+        async (data: { status?: string }) => {
+          if (data?.status === "stopped" && recordingRef.current) {
+            try {
+              await NativeSR.start({
+                language: speechLocale,
+                maxResults: 1,
+                partialResults: true,
+                popup: false,
+                prompt: "",
+              });
+            } catch (err) {
+              console.warn("[voice-note] native auto-restart failed:", err);
+            }
+          }
+        }
+      );
+      nativeStateListenerRef.current = stateListener;
+
+      await NativeSR.start({
+        language: speechLocale,
+        maxResults: 1,
+        partialResults: true,
+        popup: false,
+        prompt: "",
+      });
+      nativeActiveRef.current = true;
+      return true;
+    } catch (err) {
+      console.warn("[voice-note] native plugin path failed:", err);
+      try {
+        await nativePartialListenerRef.current?.remove();
+      } catch {}
+      try {
+        await nativeStateListenerRef.current?.remove();
+      } catch {}
+      nativePartialListenerRef.current = null;
+      nativeStateListenerRef.current = null;
+      return false;
+    }
+  }
+
+  async function stopNativeLivePreview() {
+    try {
+      await nativePartialListenerRef.current?.remove();
+    } catch {}
+    try {
+      await nativeStateListenerRef.current?.remove();
+    } catch {}
+    nativePartialListenerRef.current = null;
+    nativeStateListenerRef.current = null;
+
+    if (!nativeActiveRef.current) return;
+    nativeActiveRef.current = false;
+    try {
+      const { SpeechRecognition: NativeSR } = await import(
+        "@capacitor-community/speech-recognition"
+      );
+      await NativeSR.stop();
+    } catch (err) {
+      console.warn("[voice-note] native stop failed:", err);
+    }
+  }
+
+  // ── Web Speech fallback (desktop browsers) ──────────────────────────────
+  function startWebSpeechPreview() {
     if (typeof window === "undefined") return;
     const SR =
       (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition })
@@ -163,12 +278,6 @@ export function ProfileEditor({
     recognition.lang = speechLocale;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Diagnostic: count every result event so we can see, on-screen,
-      // whether Web Speech is actually delivering anything in this WebView.
-      setResultEventCount((c) => c + 1);
-
-      // Accumulate finalized segments into finalsRef; recompute the
-      // currently-displayed string as `finals + " " + interim`.
       let interimText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const segment = event.results[i][0].transcript;
@@ -185,28 +294,24 @@ export function ProfileEditor({
         finals && interim ? finals + " " + interim : finals || interim;
       setLivePartialSync(combined);
     };
-
-    recognition.onerror = () => {
-      // Silent: live preview is best-effort. Audio capture continues regardless.
-    };
-    recognition.onend = () => {
-      // Web Speech can end on silence — we DON'T auto-restart. MediaRecorder
-      // is still capturing, and the final Gemini transcript will be correct.
-    };
+    recognition.onerror = () => {};
+    recognition.onend = () => {};
 
     speechRecognitionRef.current = recognition;
     try {
       recognition.start();
-    } catch {
-      // Already started or unsupported state — give up silently.
-    }
+    } catch {}
   }
 
   function stopLivePreview() {
+    // Stop both tracks. Web Speech first (sync); native plugin
+    // fire-and-forget (stopVoiceNote stays sync).
+    recordingRef.current = false;
     try {
       speechRecognitionRef.current?.abort();
     } catch {}
     speechRecognitionRef.current = null;
+    void stopNativeLivePreview();
   }
 
   // Cleanup on unmount: guarantee no hot mic survives a route change.
@@ -310,7 +415,6 @@ export function ProfileEditor({
   async function startVoiceNote() {
     setRecDuration(0);
     setLivePartialSync("");
-    setResultEventCount(0);
     finalsRef.current = [];
     audioChunksRef.current = [];
 
@@ -363,9 +467,13 @@ export function ProfileEditor({
       return;
     }
     setRecording(true);
+    // recordingRef drives the native plugin's auto-restart — must be set
+    // BEFORE startLivePreview kicks off recognition.
+    recordingRef.current = true;
 
-    // Best-effort live transcript via Web Speech. Independent of MediaRecorder.
-    startLivePreview();
+    // Best-effort live transcript. Async because it dynamically imports the
+    // Capacitor plugin on native; we don't block startVoiceNote on it.
+    void startLivePreview();
 
     recDurationTimerRef.current = setInterval(() => {
       setRecDuration((p) => p + 1);
@@ -568,10 +676,6 @@ export function ProfileEditor({
               style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
             >
               {ko ? "실시간 미리보기" : "Live preview"}
-              {/* Temporary diagnostic — see if Web Speech is firing onresult
-                  at all on this WebView. If this stays at 0 while you talk,
-                  Web Speech isn't delivering results. */}
-              <span className="ml-2 opacity-60">events: {resultEventCount}</span>
             </p>
             <p
               className="text-[13px] leading-relaxed italic min-h-[1.25rem]"

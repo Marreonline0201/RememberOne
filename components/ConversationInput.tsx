@@ -91,10 +91,6 @@ export function ConversationInput({ personId, personName }: Props) {
   const [transcribing, setTranscribing] = useState(false);
   const [duration, setDuration] = useState(0);
   const [logMeeting, setLogMeeting] = useState(true);
-  // Temporary diagnostic — counts every `recognition.onresult` fire so we
-  // can verify on-screen whether Web Speech delivers results in this
-  // WebView. If this stays at 0 while talking, Web Speech is not firing.
-  const [resultEventCount, setResultEventCount] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -102,17 +98,21 @@ export function ConversationInput({ personId, personName }: Props) {
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Web Speech API recognizer (Chrome/Edge/Android WebView). Runs in parallel
-  // with MediaRecorder — both share the WebView's audio plumbing fine, no
-  // conflict. Used ONLY for live-preview display; the authoritative transcript
-  // is always Gemini's on stop.
+  // Live preview is two-track:
+  //   - On Capacitor native (Android/iOS): @capacitor-community/speech-
+  //     recognition. Bridges to native OS speech service which actually
+  //     works in WebView (Web Speech does not — diagnostic confirmed).
+  //   - On web: webkitSpeechRecognition.
+  // MediaRecorder + Gemini is always the authoritative final transcript.
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
-  // Finalized segments from Web Speech accumulate here so they don't get
-  // overwritten by the next interim event.
   const finalsRef = useRef<string[]>([]);
-  // Fallback we keep so that if Gemini transcription fails, we can drop the
-  // last live preview into the text field instead of leaving the user empty-handed.
+  // Fallback used if Gemini transcription fails.
   const livePartialRef = useRef("");
+  // Native plugin tracking.
+  const nativePartialListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
+  const nativeStateListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
+  const nativeActiveRef = useRef(false);
+  const recordingRef = useRef(false);
 
   function setLivePartialSync(value: string) {
     livePartialRef.current = value;
@@ -146,11 +146,104 @@ export function ConversationInput({ personId, personName }: Props) {
     return undefined;
   }
 
-  // ── Live preview via Web Speech API (best-effort) ───────────────────────
-  // Starts the browser's built-in recognizer. Updates `livePartial` as the
-  // user speaks. If the browser doesn't support Web Speech (Safari, some
-  // Android WebViews) we silently skip — the duration counter is enough.
-  function startLivePreview() {
+  // ── Live preview entrypoint ──────────────────────────────────────────────
+  // Native plugin first on Capacitor; Web Speech for web browsers.
+  async function startLivePreview() {
+    if (typeof window !== "undefined") {
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        if (Capacitor.isNativePlatform()) {
+          const ok = await startNativeLivePreview();
+          if (ok) return;
+        }
+      } catch (err) {
+        console.warn("[conversation] Capacitor probe failed:", err);
+      }
+    }
+    startWebSpeechPreview();
+  }
+
+  async function startNativeLivePreview(): Promise<boolean> {
+    try {
+      const { SpeechRecognition: NativeSR } = await import(
+        "@capacitor-community/speech-recognition"
+      );
+      const availability = await NativeSR.available();
+      if (!availability.available) return false;
+
+      const perms = await NativeSR.checkPermissions();
+      if (perms.speechRecognition !== "granted") {
+        const req = await NativeSR.requestPermissions();
+        if (req.speechRecognition !== "granted") return true;
+      }
+
+      const partial = await NativeSR.addListener(
+        "partialResults",
+        (data: { matches?: string[] }) => {
+          const text = (data?.matches?.[0] ?? "").trim();
+          if (text) setLivePartialSync(text);
+        }
+      );
+      nativePartialListenerRef.current = partial;
+
+      const stateListener = await NativeSR.addListener(
+        "listeningState",
+        async (data: { status?: string }) => {
+          if (data?.status === "stopped" && recordingRef.current) {
+            try {
+              await NativeSR.start({
+                language: speechLocale,
+                maxResults: 1,
+                partialResults: true,
+                popup: false,
+                prompt: "",
+              });
+            } catch (err) {
+              console.warn("[conversation] native auto-restart failed:", err);
+            }
+          }
+        }
+      );
+      nativeStateListenerRef.current = stateListener;
+
+      await NativeSR.start({
+        language: speechLocale,
+        maxResults: 1,
+        partialResults: true,
+        popup: false,
+        prompt: "",
+      });
+      nativeActiveRef.current = true;
+      return true;
+    } catch (err) {
+      console.warn("[conversation] native plugin path failed:", err);
+      try { await nativePartialListenerRef.current?.remove(); } catch {}
+      try { await nativeStateListenerRef.current?.remove(); } catch {}
+      nativePartialListenerRef.current = null;
+      nativeStateListenerRef.current = null;
+      return false;
+    }
+  }
+
+  async function stopNativeLivePreview() {
+    try { await nativePartialListenerRef.current?.remove(); } catch {}
+    try { await nativeStateListenerRef.current?.remove(); } catch {}
+    nativePartialListenerRef.current = null;
+    nativeStateListenerRef.current = null;
+    if (!nativeActiveRef.current) return;
+    nativeActiveRef.current = false;
+    try {
+      const { SpeechRecognition: NativeSR } = await import(
+        "@capacitor-community/speech-recognition"
+      );
+      await NativeSR.stop();
+    } catch (err) {
+      console.warn("[conversation] native stop failed:", err);
+    }
+  }
+
+  // ── Web Speech fallback (desktop browsers) ──────────────────────────────
+  function startWebSpeechPreview() {
     if (typeof window === "undefined") return;
     const SR =
       (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition })
@@ -172,8 +265,6 @@ export function ConversationInput({ personId, personName }: Props) {
     recognition.lang = speechLocale;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Diagnostic counter — see if Web Speech delivers anything at all.
-      setResultEventCount((c) => c + 1);
       // Accumulate finalized segments into finalsRef; recompute the
       // currently-displayed string as `finals + " " + interim`.
       let interimText = "";
@@ -210,10 +301,12 @@ export function ConversationInput({ personId, personName }: Props) {
   }
 
   function stopLivePreview() {
+    recordingRef.current = false;
     try {
       speechRecognitionRef.current?.abort();
     } catch {}
     speechRecognitionRef.current = null;
+    void stopNativeLivePreview();
   }
 
   function teardownRecorder() {
@@ -232,7 +325,6 @@ export function ConversationInput({ personId, personName }: Props) {
   async function startRecording() {
     setDuration(0);
     setLivePartialSync("");
-    setResultEventCount(0);
     audioChunksRef.current = [];
 
     let stream: MediaStream;
@@ -295,9 +387,11 @@ export function ConversationInput({ personId, personName }: Props) {
       return;
     }
     setRecording(true);
+    recordingRef.current = true;
 
-    // Best-effort live transcript via Web Speech. Independent of MediaRecorder.
-    startLivePreview();
+    // Best-effort live transcript. Async because the native plugin is loaded
+    // dynamically on Capacitor; we don't block startRecording on it.
+    void startLivePreview();
 
     // Tick the duration counter once per second.
     durationTimerRef.current = setInterval(() => {
@@ -735,7 +829,7 @@ export function ConversationInput({ personId, personName }: Props) {
           {transcribing
             ? (ko ? "변환 중..." : "Transcribing...")
             : recording
-              ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)} · events: ${resultEventCount}`
+              ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)}`
               : t("meet.tap_to_speak")}
         </p>
 

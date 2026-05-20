@@ -8,7 +8,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 // the banner on app launch. Bump this constant after each Play release
 // whose changes can't be hot-reloaded via the Capacitor server.url web
 // bundle. Keep in sync with android/app/build.gradle.
-const MIN_BUILD = 9;
+const MIN_BUILD = 10;
 
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.rememberone.app";
