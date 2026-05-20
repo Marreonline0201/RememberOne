@@ -113,6 +113,11 @@ export function ProfileEditor({
   // Mirror of livePartial state — used to recover the live transcript into
   // the notes textarea if Gemini's polish call fails on stop.
   const livePartialRef = useRef("");
+  // Temporary diagnostic — counts how many times `recognition.onresult` has
+  // fired during the current recording session. Lets us distinguish "Web
+  // Speech never delivers results" from "results arrive but state isn't
+  // updating". Reset on each startVoiceNote.
+  const [resultEventCount, setResultEventCount] = useState(0);
 
   function setLivePartialSync(value: string) {
     livePartialRef.current = value;
@@ -158,6 +163,10 @@ export function ProfileEditor({
     recognition.lang = speechLocale;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Diagnostic: count every result event so we can see, on-screen,
+      // whether Web Speech is actually delivering anything in this WebView.
+      setResultEventCount((c) => c + 1);
+
       // Accumulate finalized segments into finalsRef; recompute the
       // currently-displayed string as `finals + " " + interim`.
       let interimText = "";
@@ -301,6 +310,7 @@ export function ProfileEditor({
   async function startVoiceNote() {
     setRecDuration(0);
     setLivePartialSync("");
+    setResultEventCount(0);
     finalsRef.current = [];
     audioChunksRef.current = [];
 
@@ -558,6 +568,10 @@ export function ProfileEditor({
               style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
             >
               {ko ? "실시간 미리보기" : "Live preview"}
+              {/* Temporary diagnostic — see if Web Speech is firing onresult
+                  at all on this WebView. If this stays at 0 while you talk,
+                  Web Speech isn't delivering results. */}
+              <span className="ml-2 opacity-60">events: {resultEventCount}</span>
             </p>
             <p
               className="text-[13px] leading-relaxed italic min-h-[1.25rem]"

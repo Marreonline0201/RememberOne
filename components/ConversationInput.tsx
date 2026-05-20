@@ -91,6 +91,10 @@ export function ConversationInput({ personId, personName }: Props) {
   const [transcribing, setTranscribing] = useState(false);
   const [duration, setDuration] = useState(0);
   const [logMeeting, setLogMeeting] = useState(true);
+  // Temporary diagnostic — counts every `recognition.onresult` fire so we
+  // can verify on-screen whether Web Speech delivers results in this
+  // WebView. If this stays at 0 while talking, Web Speech is not firing.
+  const [resultEventCount, setResultEventCount] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -168,6 +172,8 @@ export function ConversationInput({ personId, personName }: Props) {
     recognition.lang = speechLocale;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Diagnostic counter — see if Web Speech delivers anything at all.
+      setResultEventCount((c) => c + 1);
       // Accumulate finalized segments into finalsRef; recompute the
       // currently-displayed string as `finals + " " + interim`.
       let interimText = "";
@@ -226,6 +232,7 @@ export function ConversationInput({ personId, personName }: Props) {
   async function startRecording() {
     setDuration(0);
     setLivePartialSync("");
+    setResultEventCount(0);
     audioChunksRef.current = [];
 
     let stream: MediaStream;
@@ -728,7 +735,7 @@ export function ConversationInput({ personId, personName }: Props) {
           {transcribing
             ? (ko ? "변환 중..." : "Transcribing...")
             : recording
-              ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)}`
+              ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)} · events: ${resultEventCount}`
               : t("meet.tap_to_speak")}
         </p>
 
