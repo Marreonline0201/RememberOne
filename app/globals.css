@@ -132,49 +132,37 @@ body {
 }
 
 /* ── Attention animations for the in-app update prompt ─────────────────── */
-/* Used by components/native-update-prompt.tsx. Two layered animations
-   designed to be noticeable without being annoying:
-     (1) a horizontal gradient sweep with a saturated purple band that
-         continuously moves across the card surface,
-     (2) a purple box-shadow that breathes in/out so the whole toast
-         feels alive even peripheral-vision.
-   Both respect prefers-reduced-motion. */
-@keyframes update-prompt-shimmer {
-  0% {
-    background-position: 200% 50%;
-  }
-  100% {
-    background-position: -200% 50%;
-  }
-}
-
-@keyframes update-prompt-glow {
+/* Used by components/native-update-prompt.tsx. Strategy: box-shadow is the
+   most universally smooth-animated CSS property across WebView versions
+   (Android Chromium has historically been flaky animating background-
+   position on a gradient). We layer two shadows into a single animation:
+     - an outer purple halo that ramps from soft (.22 alpha) to strong
+       (.55 alpha) with the blur growing from 14px → 28px,
+     - a 4px purple ring drawn via the second shadow's spread that fades
+       in and out around the entire toast.
+   Together they create an unmistakable "alive" pulse without conflicting
+   with Radix's swipe-gesture transforms. Respects reduced-motion. */
+@keyframes update-prompt-flash {
   0%, 100% {
-    box-shadow: 0 4px 14px 0 rgba(72, 45, 124, 0.22);
+    box-shadow:
+      0 4px 14px 0 rgba(72, 45, 124, 0.22),
+      0 0 0 0 rgba(196, 165, 255, 0);
   }
   50% {
-    box-shadow: 0 8px 32px 4px rgba(72, 45, 124, 0.55);
+    box-shadow:
+      0 8px 28px 2px rgba(72, 45, 124, 0.55),
+      0 0 0 4px rgba(196, 165, 255, 0.55);
   }
 }
 
 .update-prompt-attention {
-  background-image: linear-gradient(
-    90deg,
-    #d0f2ff 0%,
-    #dccaff 25%,
-    #c4a5ff 50%,
-    #dccaff 75%,
-    #d0f2ff 100%
-  );
-  background-size: 300% 100%;
-  animation:
-    update-prompt-shimmer 2.5s linear infinite,
-    update-prompt-glow 2s ease-in-out infinite;
+  background-image: linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%);
+  animation: update-prompt-flash 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .update-prompt-attention {
     animation: none;
-    background-image: linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%);
+    box-shadow: 0 4px 14px 0 rgba(72, 45, 124, 0.35);
   }
 }
