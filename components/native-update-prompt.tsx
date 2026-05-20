@@ -1,135 +1,127 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useToast } from "@/components/ui/use-toast";
-import { ToastAction } from "@/components/ui/toast";
-import { Download } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, X as XIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // Minimum Android versionCode users must be on. Anything lower triggers
-// the "Update available" toast on app launch. Bump this constant after
-// each Play release whose changes can't be hot-reloaded via the
-// Capacitor server.url web bundle (manifest changes, native plugin
-// upgrades, etc.). Keep in sync with android/app/build.gradle.
+// the banner on app launch. Bump this constant after each Play release
+// whose changes can't be hot-reloaded via the Capacitor server.url web
+// bundle. Keep in sync with android/app/build.gradle.
 const MIN_BUILD = 9;
 
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.rememberone.app";
 
-// 24h — keeps the toast visible across an entire session unless the user
-// dismisses it. Re-fires once per fresh app launch (one toast/session).
-const SESSION_MS = 24 * 60 * 60 * 1000;
-
-// Module-level guard. Survives component re-mounts and re-renders within
-// the same JS runtime (the only way the toast fires again is a fresh page
-// load / WebView reload, which is exactly the boundary we want). This
-// replaces a per-component useRef whose value didn't survive the
-// LanguageContext hydration re-render fast enough — the async IIFE
-// inside the previous effect raced past the ref check, queueing duplicate
-// toasts.
-let hasShown = false;
+// Module-level guard prevents the native version check from running more
+// than once per JS runtime. Survives every React re-render and remount.
+let didCheck = false;
 
 export function NativeUpdatePrompt() {
-  const { toast } = useToast();
   const { language } = useLanguage();
   const ko = language === "ko";
 
-  // Mirror `ko` into a ref so the toast text is up-to-date at fire time
-  // without making the effect depend on `ko` (which would re-fire on
-  // language hydration and cause the duplicate-toast bug).
-  const koRef = useRef(ko);
-  koRef.current = ko;
+  const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (hasShown) return;
-    // Mark synchronously, BEFORE any async work, so a second pass through
-    // the effect (e.g. from a context hydration re-render) bails immediately.
-    hasShown = true;
+    if (didCheck) return;
+    didCheck = true;
 
     (async () => {
       try {
         const { Capacitor } = await import("@capacitor/core");
-        if (!Capacitor.isNativePlatform()) {
-          hasShown = false;
-          return;
-        }
+        if (!Capacitor.isNativePlatform()) return;
 
         const { App } = await import("@capacitor/app");
         const info = await App.getInfo();
         const installed = parseInt(info.build, 10);
-        if (Number.isNaN(installed) || installed >= MIN_BUILD) {
-          hasShown = false;
-          return;
-        }
+        if (Number.isNaN(installed) || installed >= MIN_BUILD) return;
 
-        const isKo = koRef.current;
-        toast({
-          // Branded container: matches the lavender card gradient used
-          // throughout the app. The `update-prompt-attention` class (in
-          // app/globals.css) layers a slow shimmer + glow pulse for
-          // attention. Both animations respect prefers-reduced-motion.
-          className: "border-0 update-prompt-attention",
-          style: {
-            borderRadius: "10px 2px 10px 2px",
-          },
-          title: (
-            <span className="flex items-center gap-2">
-              <Download className="w-4 h-4 shrink-0" style={{ color: "#284e72" }} />
-              <span
-                className="text-[14px] uppercase tracking-wide"
-                style={{
-                  color: "#284e72",
-                  fontFamily: "'Hammersmith One', sans-serif",
-                }}
-              >
-                {isKo ? "업데이트 안내" : "Update available"}
-              </span>
-            </span>
-          ),
-          description: (
-            <span
-              className="block text-[12px] leading-relaxed mt-1"
-              style={{ color: "#5e7983" }}
-            >
-              {isKo
-                ? "보안 개선이 포함된 새 버전이 Play 스토어에 있습니다. 업데이트해 주세요."
-                : "A newer version with security improvements is on the Play Store. Please update."}
-            </span>
-          ),
-          duration: SESSION_MS,
-          action: (
-            <ToastAction
-              altText={isKo ? "Play 스토어 열기" : "Open Play Store"}
-              onClick={async () => {
-                try {
-                  const { Browser } = await import("@capacitor/browser");
-                  await Browser.open({ url: PLAY_STORE_URL });
-                } catch {
-                  window.location.href = PLAY_STORE_URL;
-                }
-              }}
-              // Match the app's primary-action button: navy→purple gradient,
-              // 10/2 corner radius, white Hammersmith One text.
-              className="border-0 text-white h-9 px-4 hover:opacity-90"
-              style={{
-                background: "linear-gradient(to right, #284e72, #482d7c)",
-                borderRadius: "10px 2px 10px 2px",
-                fontFamily: "'Hammersmith One', sans-serif",
-              }}
-            >
-              {isKo ? "업데이트" : "Update"}
-            </ToastAction>
-          ),
-        });
+        setNeedsUpdate(true);
       } catch (err) {
-        hasShown = false;
+        // Reset so a later mount can retry (won't happen in practice, but
+        // it's polite). Console-warn for diagnosis.
+        didCheck = false;
         console.warn("[update-prompt] version check failed:", err);
       }
     })();
-    // Intentionally only depends on `toast` (stable). `ko` is read from a
-    // ref above so we don't re-fire the effect when LanguageContext hydrates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]);
+  }, []);
 
-  return null;
+  if (!needsUpdate || dismissed) return null;
+
+  async function openPlayStore() {
+    try {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: PLAY_STORE_URL });
+    } catch {
+      window.location.href = PLAY_STORE_URL;
+    }
+  }
+
+  return (
+    <div
+      // Fixed top banner above the dashboard nav (z-40 → we sit at z-50).
+      // safe-top respects the status-bar inset on phones with notches.
+      className="fixed top-0 inset-x-0 z-50 px-3 pt-3 safe-top pointer-events-none"
+    >
+      <div
+        // The actual banner. `update-prompt-attention` class adds the
+        // breathing halo + ring pulse defined in app/globals.css.
+        className="pointer-events-auto max-w-lg mx-auto p-3 pr-2 update-prompt-attention"
+        style={{ borderRadius: "10px 2px 10px 2px" }}
+      >
+        <div className="flex items-start gap-3">
+          <Download
+            className="w-5 h-5 mt-0.5 shrink-0"
+            style={{ color: "#284e72" }}
+            aria-hidden="true"
+          />
+
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-[13px] uppercase tracking-wide leading-tight"
+              style={{
+                color: "#284e72",
+                fontFamily: "'Hammersmith One', sans-serif",
+              }}
+            >
+              {ko ? "업데이트 안내" : "Update available"}
+            </p>
+            <p
+              className="text-[11px] leading-snug mt-0.5"
+              style={{ color: "#5e7983" }}
+            >
+              {ko
+                ? "보안 개선이 포함된 새 버전이 Play 스토어에 있어요."
+                : "A newer version is on the Play Store."}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={openPlayStore}
+            className="shrink-0 text-white h-8 px-3 text-[12px] hover:opacity-90"
+            style={{
+              background: "linear-gradient(to right, #284e72, #482d7c)",
+              borderRadius: "10px 2px 10px 2px",
+              fontFamily: "'Hammersmith One', sans-serif",
+            }}
+          >
+            {ko ? "업데이트" : "Update"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            aria-label={ko ? "닫기" : "Dismiss"}
+            className="shrink-0 w-6 h-6 -mt-0.5 -mr-1 flex items-center justify-center rounded-full hover:bg-black/5"
+            style={{ color: "#665b7b" }}
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -143,21 +143,24 @@ body {
    Together they create an unmistakable "alive" pulse without conflicting
    with Radix's swipe-gesture transforms. Respects reduced-motion. */
 @keyframes update-prompt-flash {
+  /* Symmetric pulse only — y-offset & blur of the base shadow are CONSTANT
+     so the toast doesn't appear to move downward. Only the ring (spread)
+     and the opacities grow/shrink. */
   0%, 100% {
     box-shadow:
-      0 4px 14px 0 rgba(72, 45, 124, 0.22),
+      0 4px 14px 0 rgba(72, 45, 124, 0.30),
       0 0 0 0 rgba(196, 165, 255, 0);
   }
   50% {
     box-shadow:
-      0 8px 28px 2px rgba(72, 45, 124, 0.55),
-      0 0 0 4px rgba(196, 165, 255, 0.55);
+      0 4px 14px 0 rgba(72, 45, 124, 0.50),
+      0 0 0 5px rgba(196, 165, 255, 0.55);
   }
 }
 
 .update-prompt-attention {
   background-image: linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%);
-  animation: update-prompt-flash 1.4s ease-in-out infinite;
+  animation: update-prompt-flash 1.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
