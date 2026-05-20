@@ -259,3 +259,55 @@ Extract new details about ${personName}. Respond with only the JSON object.`;
 
   return parsed;
 }
+
+// ── Audio transcription ───────────────────────────────────────────────────
+// Used by /api/ai/transcribe. Gemini 2.5 Flash accepts audio inputs natively
+// via inlineData parts. Returns just the raw verbatim transcript text.
+//
+// We normalize the WebM container that Chrome/Android record into ("audio/webm")
+// to the MIME Gemini documents support. mp4 → aac, ogg/webm stay as-is.
+export async function transcribeAudio(
+  audioBase64: string,
+  mimeType: string,
+  language: "en" | "ko"
+): Promise<string> {
+  const lower = mimeType.toLowerCase();
+  const normalizedMime = lower.startsWith("audio/mp4")
+    ? "audio/aac"
+    : lower.startsWith("audio/webm")
+      ? "audio/webm"
+      : lower.startsWith("audio/ogg")
+        ? "audio/ogg"
+        : lower.startsWith("audio/wav") || lower.startsWith("audio/x-wav")
+          ? "audio/wav"
+          : lower.startsWith("audio/mp3") || lower.startsWith("audio/mpeg")
+            ? "audio/mp3"
+            : mimeType;
+
+  const prompt =
+    language === "ko"
+      ? "이 오디오를 한국어로 그대로 받아쓰세요. 부연 설명, 마크다운, 따옴표 없이 트랜스크립트 텍스트만 반환하세요. 화자 표시도 붙이지 마세요."
+      : "Transcribe this audio verbatim. Return only the transcript text — no explanations, no markdown, no quotes, no speaker labels.";
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: {
+      temperature: 0.0,
+      responseMimeType: "text/plain",
+    },
+  });
+
+  const result = await model.generateContent([
+    prompt,
+    {
+      inlineData: {
+        data: audioBase64,
+        mimeType: normalizedMime,
+      },
+    },
+  ]);
+
+  const text = result.response.text().trim();
+  return text.slice(0, 4000);
+}
+

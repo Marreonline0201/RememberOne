@@ -9,8 +9,11 @@
 //   Sends transcript to /api/people/[id]/notes — only adds details about that one person,
 //   then navigates back to their profile page.
 //
-// On Android (Capacitor) uses the native SpeechRecognition plugin.
-// On web falls back to the Web Speech API.
+// Recording strategy: continuous audio capture via MediaRecorder. The mic stays
+// hot until the user taps stop (or a 60-second safety cap fires). On stop the
+// audio blob is uploaded to /api/ai/transcribe where Gemini does the transcript
+// in one pass. This replaces the old SpeechRecognition flow which cut off mid-
+// sentence on every short pause.
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -25,12 +28,10 @@ import {
   CheckCircle2,
   X,
   ArrowLeft,
+  Loader2,
 } from "lucide-react";
-import { Capacitor } from "@capacitor/core";
-import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { getLanguage } from "@/lib/i18n";
 import { localizeKey, cn } from "@/lib/utils";
 
 type Step = "input" | "loading" | "success" | "preview";
@@ -46,11 +47,30 @@ interface Props {
   personName?: string;
 }
 
+// 60-second safety cap: if the user forgets to tap stop we cut them off so we
+// don't run a hot mic in the background forever. Tuned so a normal "tell me
+// about who you met" monologue fits comfortably.
+const MAX_RECORDING_SECONDS = 60;
+
+// MIME types we'll request from MediaRecorder, in preference order. First one
+// the browser supports wins. Gemini accepts webm, ogg, mp4(aac) — see lib/gemini.ts.
+const PREFERRED_MIME_TYPES = [
+  "audio/webm;codecs=opus",
+  "audio/ogg;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+];
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export function ConversationInput({ personId, personName }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const { language, t } = useLanguage();
-  const speechLocale = getLanguage(language).locale;
   const ko = language === "ko";
 
   // person-specific mode
@@ -60,71 +80,79 @@ export function ConversationInput({ personId, personName }: Props) {
   const isLoading = step === "loading";
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<ExtractionPreview | null>(null);
-  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [duration, setDuration] = useState(0);
   const [logMeeting, setLogMeeting] = useState(true);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const isNative = Capacitor.isNativePlatform();
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Clean up the mic, the recorder, and any timers on unmount. Guards against
+  // a hot mic surviving a route change.
   useEffect(() => {
     return () => {
-      if (isNative) {
-        SpeechRecognition.stop().catch(() => {});
-      } else {
-        recognitionRef.current?.stop();
-      }
-    };
-  }, [isNative]);
-
-  async function toggleVoice() {
-    // ── Native (Android / iOS) ───────────────────────────────────────────────
-    if (isNative) {
-      if (listening) {
-        await SpeechRecognition.stop();
-        setListening(false);
-        return;
-      }
-
-      const { speechRecognition } = await SpeechRecognition.requestPermissions();
-      if (speechRecognition !== "granted") {
-        toast({
-          title: t("meet.mic_denied_title"),
-          description: t("meet.mic_denied_body"),
-          variant: "destructive",
-        });
-        return;
-      }
-
-      setListening(true);
       try {
-        const result = await SpeechRecognition.start({
-          language: speechLocale,
-          maxResults: 1,
-          popup: false,
-        });
-        const transcript = result.matches?.[0] ?? "";
-        if (transcript) {
-          setText((prev) => {
-            const joined = prev ? prev.trimEnd() + " " + transcript : transcript;
-            return joined.slice(0, 4000);
-          });
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
         }
-      } catch {
-        // user cancelled or error — ignore
-      } finally {
-        setListening(false);
-      }
+      } catch {}
+      audioStreamRef.current?.getTracks().forEach((track) => track.stop());
+      audioStreamRef.current = null;
+      if (durationTimerRef.current) clearInterval(durationTimerRef.current);
+      if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
+    };
+  }, []);
+
+  function pickMimeType(): string | undefined {
+    if (typeof MediaRecorder === "undefined") return undefined;
+    for (const mt of PREFERRED_MIME_TYPES) {
+      if (MediaRecorder.isTypeSupported(mt)) return mt;
+    }
+    return undefined;
+  }
+
+  function teardownRecorder() {
+    audioStreamRef.current?.getTracks().forEach((track) => track.stop());
+    audioStreamRef.current = null;
+    if (durationTimerRef.current) {
+      clearInterval(durationTimerRef.current);
+      durationTimerRef.current = null;
+    }
+    if (maxDurationTimerRef.current) {
+      clearTimeout(maxDurationTimerRef.current);
+      maxDurationTimerRef.current = null;
+    }
+  }
+
+  async function startRecording() {
+    setDuration(0);
+    audioChunksRef.current = [];
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.error("[recorder] getUserMedia failed:", err);
+      toast({
+        title: t("meet.mic_denied_title"),
+        description: t("meet.mic_denied_body"),
+        variant: "destructive",
+      });
       return;
     }
+    audioStreamRef.current = stream;
 
-    // ── Web (browser) ────────────────────────────────────────────────────────
-    const SR =
-      (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition })
-        .SpeechRecognition ??
-      (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition })
-        .webkitSpeechRecognition;
-
-    if (!SR) {
+    const mimeType = pickMimeType();
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch (err) {
+      console.error("[recorder] MediaRecorder ctor failed:", err);
+      teardownRecorder();
       toast({
         title: t("meet.not_supported_title"),
         description: t("meet.not_supported_body"),
@@ -132,52 +160,159 @@ export function ConversationInput({ personId, personName }: Props) {
       });
       return;
     }
+    mediaRecorderRef.current = recorder;
 
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-      return;
-    }
-
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = speechLocale;
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .slice(event.resultIndex)
-        .map((r) => r[0].transcript)
-        .join(" ");
-      setText((prev) => {
-        const joined = prev ? prev.trimEnd() + " " + transcript : transcript;
-        return joined.slice(0, 4000);
-      });
+    recorder.ondataavailable = (e: BlobEvent) => {
+      if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
     };
 
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
+    recorder.onstop = () => {
+      const blob = new Blob(audioChunksRef.current, {
+        type: recorder.mimeType || "audio/webm",
+      });
+      audioChunksRef.current = [];
+      teardownRecorder();
+      // Fire off transcription. We don't await here — onstop is a DOM event handler.
+      void transcribeBlob(blob);
+    };
 
-    recognitionRef.current = recognition;
-    recognition.start();
-    setListening(true);
+    recorder.onerror = (e) => {
+      console.error("[recorder] error:", e);
+      setRecording(false);
+      teardownRecorder();
+    };
+
+    try {
+      // Collect chunks every 1s so the final blob is built incrementally and we
+      // don't lose anything if the page is force-closed.
+      recorder.start(1000);
+    } catch (err) {
+      console.error("[recorder] start failed:", err);
+      teardownRecorder();
+      return;
+    }
+    setRecording(true);
+
+    // Tick the duration counter once per second.
+    durationTimerRef.current = setInterval(() => {
+      setDuration((prev) => prev + 1);
+    }, 1000);
+
+    // Safety auto-stop.
+    maxDurationTimerRef.current = setTimeout(() => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        toast({
+          title: ko ? "녹음 시간 제한 도달" : "Recording limit reached",
+          description: ko
+            ? `최대 ${MAX_RECORDING_SECONDS}초까지 녹음할 수 있습니다.`
+            : `Recordings are capped at ${MAX_RECORDING_SECONDS} seconds.`,
+        });
+        stopRecording();
+      }
+    }, MAX_RECORDING_SECONDS * 1000);
+  }
+
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    try {
+      recorder.stop();
+    } catch (err) {
+      console.error("[recorder] stop failed:", err);
+    }
+    setRecording(false);
+  }
+
+  async function transcribeBlob(blob: Blob) {
+    if (blob.size === 0) return;
+    setTranscribing(true);
+
+    const filename = blob.type.includes("webm")
+      ? "recording.webm"
+      : blob.type.includes("mp4")
+        ? "recording.mp4"
+        : blob.type.includes("ogg")
+          ? "recording.ogg"
+          : "recording.bin";
+
+    const form = new FormData();
+    form.append("audio", blob, filename);
+
+    try {
+      const res = await fetch("/api/ai/transcribe", {
+        method: "POST",
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error ?? "Transcription failed");
+      }
+      const newText: string = (json.data?.text ?? "").trim();
+      if (newText) {
+        setText((prev) => {
+          const joined = prev ? prev.trimEnd() + " " + newText : newText;
+          return joined.slice(0, 4000);
+        });
+      } else {
+        toast({
+          title: ko ? "음성을 인식하지 못했어요" : "Couldn't hear anything",
+          description: ko
+            ? "다시 시도하거나 직접 입력해 주세요."
+            : "Try again or type your note instead.",
+        });
+      }
+    } catch (err: unknown) {
+      console.error("[transcribe] failed:", err);
+      toast({
+        title: ko ? "음성 인식 실패" : "Transcription failed",
+        description: err instanceof Error ? err.message : t("meet.something_wrong"),
+        variant: "destructive",
+      });
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  function toggleVoice() {
+    if (recording) stopRecording();
+    else void startRecording();
   }
 
   // ── Submit: person mode uses notes API; general mode uses extract API ────
   async function handleSubmit() {
-    if (!text.trim()) return;
+    // If a recording is still going, stop it first so its transcription kicks
+    // off. We don't auto-submit after — the user gets a chance to see what was
+    // transcribed and tap submit again.
+    if (recording) {
+      stopRecording();
+      return;
+    }
+    // If a transcription is still in flight, ask the user to wait.
+    if (transcribing) {
+      toast({
+        title: ko ? "잠시만요" : "Just a moment",
+        description: ko
+          ? "음성을 텍스트로 변환 중입니다..."
+          : "Still transcribing your audio...",
+      });
+      return;
+    }
+
+    const fullText = text.trim();
+    if (!fullText) return;
+
     setStep("loading");
 
     try {
       if (isPerson) {
-        // ── Person-specific: add details to one existing person ───────────
         const res = await fetch(`/api/people/${personId}/notes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, logMeeting }),
+          body: JSON.stringify({ text: fullText, logMeeting }),
         });
         const json = await res.json();
-        if (!res.ok || json.error) throw new Error(json.error ?? t("meet.extraction_failed"));
+        if (!res.ok || json.error)
+          throw new Error(json.error ?? t("meet.extraction_failed"));
 
         setStep("success");
         setTimeout(() => {
@@ -185,14 +320,14 @@ export function ConversationInput({ personId, personName }: Props) {
           router.refresh();
         }, 1200);
       } else {
-        // ── General: extract and save multiple people ──────────────────────
         const res = await fetch("/api/ai/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text: fullText }),
         });
         const json = await res.json();
-        if (!res.ok || json.error) throw new Error(json.error ?? t("meet.extraction_failed"));
+        if (!res.ok || json.error)
+          throw new Error(json.error ?? t("meet.extraction_failed"));
 
         setPreview(json.data);
         setStep("success");
@@ -363,6 +498,9 @@ export function ConversationInput({ personId, personName }: Props) {
   }
 
   // ── INPUT ────────────────────────────────────────────────────────────────
+  const micDisabled = isLoading || transcribing;
+  const showSubmit = text.trim().length > 0 && !recording && !transcribing;
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-200px)]">
 
@@ -407,7 +545,7 @@ export function ConversationInput({ personId, personName }: Props) {
       {/* Big circle mic button */}
       <div className="flex flex-col items-center justify-center flex-1 gap-5 py-10">
         <div className="relative">
-          {listening && (
+          {recording && (
             <>
               <span
                 className="absolute inset-[-16px] rounded-full opacity-20 animate-ping"
@@ -423,9 +561,12 @@ export function ConversationInput({ personId, personName }: Props) {
           <button
             type="button"
             onClick={toggleVoice}
-            disabled={isLoading}
-            aria-label={listening ? "Stop recording" : "Tap to speak"}
-            className="relative w-32 h-32 rounded-full p-[3px] transition-transform active:scale-95 focus:outline-none shadow-lg"
+            disabled={micDisabled}
+            aria-label={recording ? "Stop recording" : "Tap to speak"}
+            className={cn(
+              "relative w-32 h-32 rounded-full p-[3px] transition-transform active:scale-95 focus:outline-none shadow-lg",
+              micDisabled && "opacity-60"
+            )}
             style={{
               background: "linear-gradient(135deg, #00d4f7, #c84b8a, #482d7c)",
             }}
@@ -433,10 +574,12 @@ export function ConversationInput({ personId, personName }: Props) {
             <div
               className="w-full h-full rounded-full flex items-center justify-center"
               style={{
-                backgroundColor: listening ? "transparent" : "#fbf6ff",
+                backgroundColor: recording ? "transparent" : "#fbf6ff",
               }}
             >
-              {listening ? (
+              {transcribing ? (
+                <Loader2 className="w-10 h-10 text-white animate-spin" />
+              ) : recording ? (
                 <MicOff className="w-10 h-10 text-white" />
               ) : (
                 <Mic className="w-10 h-10" style={{ color: "#482d7c" }} />
@@ -453,11 +596,27 @@ export function ConversationInput({ personId, personName }: Props) {
             fontFamily: "'Hammersmith One', sans-serif",
           }}
         >
-          {listening ? t("meet.listening") : t("meet.tap_to_speak")}
+          {transcribing
+            ? (ko ? "변환 중..." : "Transcribing...")
+            : recording
+              ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)}`
+              : t("meet.tap_to_speak")}
         </p>
 
+        {/* Hint while recording — explain auto-stop */}
+        {recording && (
+          <p
+            className="text-[11px] text-center -mt-3"
+            style={{ color: "#7a6b95" }}
+          >
+            {ko
+              ? `다시 누르면 멈춥니다 · ${MAX_RECORDING_SECONDS}초 후 자동 종료`
+              : `Tap mic to stop · auto-stops at ${MAX_RECORDING_SECONDS}s`}
+          </p>
+        )}
+
         {/* Transcript display */}
-        {text && (
+        {text && !recording && (
           <div
             className="relative w-full rounded-[10px_2px_10px_2px] p-4"
             style={{ backgroundColor: "#f0e8ff", border: "1px solid #dccaff" }}
@@ -475,7 +634,7 @@ export function ConversationInput({ personId, personName }: Props) {
         )}
 
         {/* Meeting type toggle — person mode only */}
-        {isPerson && (
+        {isPerson && !recording && !transcribing && (
           <div className="flex items-center gap-1 p-1 rounded-lg w-fit mx-auto" style={{ backgroundColor: "rgba(220,202,255,0.3)" }}>
             <button
               type="button"
@@ -507,7 +666,7 @@ export function ConversationInput({ personId, personName }: Props) {
         )}
 
         {/* Submit button */}
-        {text.trim() && (
+        {showSubmit && (
           <button
             type="button"
             onClick={handleSubmit}
