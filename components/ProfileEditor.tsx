@@ -30,6 +30,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus, Trash2, Save, Loader2, Undo2, Mic, MicOff } from "lucide-react";
 import type { PersonAttribute } from "@/types/database";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getLanguage } from "@/lib/i18n";
 
 // Voice-note recording constants. Same 60-s safety cap as ConversationInput so
 // the mic can never silently stay hot in the background.
@@ -75,27 +77,36 @@ export function ProfileEditor({
   injectKeyframe();
   const { toast } = useToast();
   const router = useRouter();
+  const { language } = useLanguage();
+  const ko = language === "ko";
+  const speechLocale = getLanguage(language).locale;
   const [isPending, startTransition] = useTransition();
   const newRowRef = useRef<HTMLDivElement>(null);
 
   const [notes, setNotes] = useState(initialNotes);
   const [notesDirty, setNotesDirty] = useState(false);
 
-  // ── Notes voice recording (mic at the bottom-right of the notes textarea) ─
+  // ── Notes voice recording (rectangle mic button BELOW the notes textarea) ─
   // Captures audio with MediaRecorder, sends to /api/ai/transcribe with the
   // polish flag, appends Gemini's grammar-cleaned transcript to the existing
-  // notes value. Mirrors the recording lifecycle in ConversationInput.tsx so
-  // we get the same robust mic + auto-stop behavior here without changing the
-  // page layout.
+  // notes value. While recording we ALSO run the browser's Web Speech API to
+  // show an italic live transcript so the user gets immediate feedback. The
+  // authoritative final text is always Gemini's polished version on stop.
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [recDuration, setRecDuration] = useState(0);
+  const [livePartial, setLivePartial] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recDurationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recMaxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Web Speech API refs — best-effort live preview only. MediaRecorder is the
+  // authoritative capture; Web Speech can drop on silence and we don't care.
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalsRef = useRef<string[]>([]);
 
   function teardownRecorder() {
     audioStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -110,6 +121,64 @@ export function ProfileEditor({
     }
   }
 
+  // ── Live preview via Web Speech API (best-effort) ───────────────────────
+  // Mirrors the pattern in ConversationInput.tsx. Live italic text shown
+  // while the user speaks; cleared on stop when Gemini's polished transcript
+  // takes over and lands in the notes textarea.
+  function startLivePreview() {
+    if (typeof window === "undefined") return;
+    const SR =
+      (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition })
+        .SpeechRecognition ??
+      (window as typeof window & {
+        webkitSpeechRecognition?: typeof SpeechRecognition;
+      }).webkitSpeechRecognition;
+    if (!SR) return;
+
+    finalsRef.current = [];
+    let recognition: SpeechRecognition;
+    try {
+      recognition = new SR();
+    } catch {
+      return;
+    }
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = speechLocale;
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const segment = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          const trimmed = segment.trim();
+          if (trimmed) finalsRef.current.push(trimmed);
+        } else {
+          interimText += segment;
+        }
+      }
+      const finals = finalsRef.current.join(" ").trim();
+      const interim = interimText.trim();
+      setLivePartial(
+        finals && interim ? finals + " " + interim : finals || interim
+      );
+    };
+    recognition.onerror = () => {};
+    recognition.onend = () => {};
+
+    speechRecognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {}
+  }
+
+  function stopLivePreview() {
+    try {
+      speechRecognitionRef.current?.abort();
+    } catch {}
+    speechRecognitionRef.current = null;
+  }
+
   // Cleanup on unmount: guarantee no hot mic survives a route change.
   useEffect(() => {
     return () => {
@@ -118,6 +187,7 @@ export function ProfileEditor({
           mediaRecorderRef.current.stop();
         }
       } catch {}
+      stopLivePreview();
       teardownRecorder();
     };
   }, []);
@@ -157,15 +227,48 @@ export function ProfileEditor({
           return joined.slice(0, 4000);
         });
         setNotesDirty(true);
+        // Live preview is no longer needed — Gemini's polished version is now
+        // committed to notes.
+        setLivePartial("");
+        finalsRef.current = [];
       } else {
         toast({
-          title: "Couldn't hear anything",
-          description: "Try again or type your note instead.",
+          title: ko ? "음성을 인식하지 못했어요" : "Couldn't hear anything",
+          description: ko
+            ? "다시 시도하거나 직접 입력해 주세요."
+            : "Try again or type your note instead.",
         });
+        // Fallback: if Gemini returned nothing but Web Speech captured
+        // something, promote the live preview into notes so the recording
+        // isn't lost.
+        const fallback = livePartial.trim();
+        if (fallback) {
+          setNotes((prev) => {
+            const trimmed = prev.trimEnd();
+            const joined = trimmed ? `${trimmed}\n${fallback}` : fallback;
+            return joined.slice(0, 4000);
+          });
+          setNotesDirty(true);
+        }
+        setLivePartial("");
+        finalsRef.current = [];
       }
     } catch (err: unknown) {
+      // Same fallback: promote whatever Web Speech captured so the user
+      // doesn't lose their recording. They can clean it up by hand.
+      const fallback = livePartial.trim();
+      if (fallback) {
+        setNotes((prev) => {
+          const trimmed = prev.trimEnd();
+          const joined = trimmed ? `${trimmed}\n${fallback}` : fallback;
+          return joined.slice(0, 4000);
+        });
+        setNotesDirty(true);
+      }
+      setLivePartial("");
+      finalsRef.current = [];
       toast({
-        title: "Transcription failed",
+        title: ko ? "음성 인식 실패" : "Transcription failed",
         description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
@@ -176,6 +279,8 @@ export function ProfileEditor({
 
   async function startVoiceNote() {
     setRecDuration(0);
+    setLivePartial("");
+    finalsRef.current = [];
     audioChunksRef.current = [];
 
     let stream: MediaStream;
@@ -228,6 +333,9 @@ export function ProfileEditor({
     }
     setRecording(true);
 
+    // Best-effort live transcript via Web Speech. Independent of MediaRecorder.
+    startLivePreview();
+
     recDurationTimerRef.current = setInterval(() => {
       setRecDuration((p) => p + 1);
     }, 1000);
@@ -235,8 +343,10 @@ export function ProfileEditor({
     recMaxDurationTimerRef.current = setTimeout(() => {
       if (mediaRecorderRef.current?.state === "recording") {
         toast({
-          title: "Recording limit reached",
-          description: `Recordings are capped at ${MAX_RECORDING_SECONDS} seconds.`,
+          title: ko ? "녹음 시간 제한 도달" : "Recording limit reached",
+          description: ko
+            ? `최대 ${MAX_RECORDING_SECONDS}초까지 녹음할 수 있습니다.`
+            : `Recordings are capped at ${MAX_RECORDING_SECONDS} seconds.`,
         });
         stopVoiceNote();
       }
@@ -246,6 +356,7 @@ export function ProfileEditor({
   function stopVoiceNote() {
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
+    stopLivePreview();
     try {
       recorder.stop();
     } catch {}
@@ -394,67 +505,104 @@ export function ProfileEditor({
   return (
     <div className="space-y-6">
       {/* Notes */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="notes" className="text-sm font-medium">
           Notes
         </Label>
-        {/* `relative` wrapper so the voice-note mic can sit at the bottom-right
-            of the textarea without changing the page layout. The textarea has
-            extra bottom padding so typed text never slides under the mic. */}
-        <div className="relative">
-          <Textarea
-            id="notes"
-            value={notes}
-            onChange={(e) => {
-              setNotes(e.target.value);
-              setNotesDirty(true);
-            }}
-            placeholder="Add any free-form notes about this person..."
-            /*
-              min-h-[100px] gives enough space on mobile.
-              text-base prevents iOS auto-zoom on focus.
-              pb-11 reserves room for the absolute-positioned mic.
-            */
-            className="min-h-[100px] text-base md:text-sm resize-none pb-11"
-          />
+        <Textarea
+          id="notes"
+          value={notes}
+          onChange={(e) => {
+            setNotes(e.target.value);
+            setNotesDirty(true);
+          }}
+          placeholder="Add any free-form notes about this person..."
+          /*
+            min-h-[100px] gives enough space on mobile.
+            text-base prevents iOS auto-zoom on focus.
+          */
+          className="min-h-[100px] text-base md:text-sm resize-none"
+        />
 
-          {/* Live recording duration — only while the mic is active. */}
-          {recording && (
-            <span
-              className="absolute bottom-3 right-12 text-[11px] tabular-nums"
+        {/* Live transcript card — only visible while recording or while there
+            is in-flight Web Speech text. Italic = "not committed yet"; the
+            authoritative polished version replaces it on stop. */}
+        {(recording || livePartial) && (
+          <div
+            className="p-3 rounded-[10px_2px_10px_2px]"
+            style={{ backgroundColor: "#f0e8ff", border: "1px solid #dccaff" }}
+          >
+            <p
+              className="text-[10px] uppercase tracking-wider mb-1"
+              style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+            >
+              {ko ? "실시간 미리보기" : "Live preview"}
+            </p>
+            <p
+              className="text-[13px] leading-relaxed italic min-h-[1.25rem]"
               style={{ color: "#5e7983" }}
             >
-              {formatDuration(recDuration)}
-            </span>
-          )}
+              {livePartial ||
+                (recording
+                  ? ko
+                    ? "듣고 있어요…"
+                    : "Listening…"
+                  : "")}
+            </p>
+          </div>
+        )}
 
-          <button
-            type="button"
-            onClick={toggleVoiceNote}
-            disabled={transcribing}
-            aria-label={
-              recording
-                ? "Stop voice note"
-                : transcribing
-                  ? "Transcribing voice note"
-                  : "Record voice note"
-            }
-            className="absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-70 shadow-sm"
-            style={{
-              background: recording
-                ? "linear-gradient(135deg, #00d4f7, #c84b8a, #482d7c)"
-                : "rgba(220, 202, 255, 0.6)",
-            }}
-          >
-            {transcribing ? (
-              <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#482d7c" }} />
-            ) : recording ? (
-              <MicOff className="w-4 h-4 text-white" />
-            ) : (
-              <Mic className="w-4 h-4" style={{ color: "#482d7c" }} />
-            )}
-          </button>
-        </div>
+        {/* Voice-note button — full-width rectangle matching the "Log meeting"
+            CTA style (asymmetric corners, navy gradient when active). Sits
+            BELOW the notes textarea so it never overlays user input. */}
+        <button
+          type="button"
+          onClick={toggleVoiceNote}
+          disabled={transcribing}
+          aria-label={
+            recording
+              ? ko ? "녹음 중지" : "Stop recording"
+              : transcribing
+                ? ko ? "변환 중" : "Transcribing"
+                : ko ? "음성 메모 녹음" : "Record voice note"
+          }
+          className="w-full h-11 flex items-center justify-center gap-2 rounded-[10px_2px_10px_2px] transition-all active:opacity-80 disabled:opacity-70"
+          style={
+            recording
+              ? {
+                  background: "linear-gradient(to right, #284e72, #482d7c)",
+                  color: "#ffffff",
+                }
+              : {
+                  backgroundColor: "#f5f0ff",
+                  border: "1px solid #dccaff",
+                  color: "#284e72",
+                }
+          }
+        >
+          {transcribing ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
+                {ko ? "변환 중..." : "Transcribing..."}
+              </span>
+            </>
+          ) : recording ? (
+            <>
+              <MicOff className="w-4 h-4" />
+              <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
+                {ko ? "녹음 중지" : "Stop"} · {formatDuration(recDuration)}
+              </span>
+            </>
+          ) : (
+            <>
+              <Mic className="w-4 h-4" />
+              <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
+                {ko ? "음성 메모" : "Voice note"}
+              </span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Attributes */}
