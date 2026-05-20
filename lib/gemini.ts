@@ -290,7 +290,8 @@ Extract new details about ${personName}. Respond with only the JSON object.`;
 export async function transcribeAudio(
   audioBase64: string,
   mimeType: string,
-  language: "en" | "ko"
+  language: "en" | "ko",
+  polish: boolean = false
 ): Promise<string> {
   const lower = mimeType.toLowerCase();
   const normalizedMime = lower.startsWith("audio/mp4")
@@ -305,8 +306,17 @@ export async function transcribeAudio(
             ? "audio/mp3"
             : mimeType;
 
-  const prompt =
-    language === "ko"
+  // Two prompt modes:
+  //  - verbatim: word-for-word, used by the /meet conversation flow which
+  //    then feeds the AI extractor (it wants the raw voice).
+  //  - polish: write exactly what the speaker said BUT with corrected
+  //    grammar, punctuation, and obvious typos. Same facts, cleaner prose.
+  //    Used by the Notes voice button on the person detail page.
+  const prompt = polish
+    ? language === "ko"
+      ? "이 오디오의 화자가 말한 내용을 한국어로 받아쓰되, 문법·구두점·맞춤법만 자연스럽게 다듬으세요. 새로운 정보를 추가하지 말고 사실을 바꾸지 마세요. 부연 설명, 마크다운, 따옴표 없이 다듬어진 트랜스크립트 텍스트만 반환하세요. 화자 표시도 붙이지 마세요."
+      : "Write down exactly what the speaker said in this audio, but with corrected grammar, punctuation, and obvious typos. Keep every detail and fact the same — do not add new information, do not remove information, do not paraphrase. Return only the cleaned-up transcript text — no explanations, no markdown, no quotes, no speaker labels."
+    : language === "ko"
       ? "이 오디오를 한국어로 그대로 받아쓰세요. 부연 설명, 마크다운, 따옴표 없이 트랜스크립트 텍스트만 반환하세요. 화자 표시도 붙이지 마세요."
       : "Transcribe this audio verbatim. Return only the transcript text — no explanations, no markdown, no quotes, no speaker labels.";
 

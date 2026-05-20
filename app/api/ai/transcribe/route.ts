@@ -100,8 +100,14 @@ export async function POST(request: Request) {
       | "en"
       | "ko";
 
-    // 6. Transcribe
-    const text = await transcribeAudio(audioBase64, rawMime, lang);
+    // 6. Optional polish flag — when "true" Gemini fixes grammar/punctuation
+    //    while keeping the speaker's content intact. Used by the Notes voice
+    //    button. Default (false) keeps the verbatim flow that the AI extractor
+    //    on /meet still relies on.
+    const polish = form.get("polish") === "true";
+
+    // 7. Transcribe
+    const text = await transcribeAudio(audioBase64, rawMime, lang, polish);
 
     return NextResponse.json({ data: { text }, error: null });
   } catch (err: unknown) {

@@ -28,8 +28,30 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Trash2, Save, Loader2, Undo2 } from "lucide-react";
+import { Plus, Trash2, Save, Loader2, Undo2, Mic, MicOff } from "lucide-react";
 import type { PersonAttribute } from "@/types/database";
+
+// Voice-note recording constants. Same 60-s safety cap as ConversationInput so
+// the mic can never silently stay hot in the background.
+const MAX_RECORDING_SECONDS = 60;
+const PREFERRED_MIME_TYPES = [
+  "audio/webm;codecs=opus",
+  "audio/ogg;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+];
+function pickMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  for (const mt of PREFERRED_MIME_TYPES) {
+    if (MediaRecorder.isTypeSupported(mt)) return mt;
+  }
+  return undefined;
+}
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 interface Props {
   personId: string;
@@ -58,6 +80,183 @@ export function ProfileEditor({
 
   const [notes, setNotes] = useState(initialNotes);
   const [notesDirty, setNotesDirty] = useState(false);
+
+  // ── Notes voice recording (mic at the bottom-right of the notes textarea) ─
+  // Captures audio with MediaRecorder, sends to /api/ai/transcribe with the
+  // polish flag, appends Gemini's grammar-cleaned transcript to the existing
+  // notes value. Mirrors the recording lifecycle in ConversationInput.tsx so
+  // we get the same robust mic + auto-stop behavior here without changing the
+  // page layout.
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [recDuration, setRecDuration] = useState(0);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recDurationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recMaxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function teardownRecorder() {
+    audioStreamRef.current?.getTracks().forEach((t) => t.stop());
+    audioStreamRef.current = null;
+    if (recDurationTimerRef.current) {
+      clearInterval(recDurationTimerRef.current);
+      recDurationTimerRef.current = null;
+    }
+    if (recMaxDurationTimerRef.current) {
+      clearTimeout(recMaxDurationTimerRef.current);
+      recMaxDurationTimerRef.current = null;
+    }
+  }
+
+  // Cleanup on unmount: guarantee no hot mic survives a route change.
+  useEffect(() => {
+    return () => {
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+      } catch {}
+      teardownRecorder();
+    };
+  }, []);
+
+  async function transcribeBlob(blob: Blob) {
+    if (blob.size === 0) {
+      setTranscribing(false);
+      return;
+    }
+    setTranscribing(true);
+
+    const filename = blob.type.includes("webm")
+      ? "recording.webm"
+      : blob.type.includes("mp4")
+        ? "recording.mp4"
+        : blob.type.includes("ogg")
+          ? "recording.ogg"
+          : "recording.bin";
+
+    const form = new FormData();
+    form.append("audio", blob, filename);
+    // Tell the API to polish grammar/punctuation while keeping content intact.
+    form.append("polish", "true");
+
+    try {
+      const res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error ?? "Transcription failed");
+
+      const newText: string = (json.data?.text ?? "").trim();
+      if (newText) {
+        setNotes((prev) => {
+          const trimmed = prev.trimEnd();
+          // Newline-separate if there's existing prose; otherwise just use the
+          // transcript as-is.
+          const joined = trimmed ? `${trimmed}\n${newText}` : newText;
+          return joined.slice(0, 4000);
+        });
+        setNotesDirty(true);
+      } else {
+        toast({
+          title: "Couldn't hear anything",
+          description: "Try again or type your note instead.",
+        });
+      }
+    } catch (err: unknown) {
+      toast({
+        title: "Transcription failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  async function startVoiceNote() {
+    setRecDuration(0);
+    audioChunksRef.current = [];
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      toast({
+        title: "Microphone unavailable",
+        description: "Please allow microphone access in your device settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+    audioStreamRef.current = stream;
+
+    const mimeType = pickMimeType();
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch {
+      teardownRecorder();
+      toast({
+        title: "Recording not supported",
+        description: "Your browser doesn't support audio recording.",
+        variant: "destructive",
+      });
+      return;
+    }
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (e: BlobEvent) => {
+      if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+      audioChunksRef.current = [];
+      teardownRecorder();
+      void transcribeBlob(blob);
+    };
+    recorder.onerror = () => {
+      setRecording(false);
+      teardownRecorder();
+    };
+
+    try {
+      recorder.start(1000);
+    } catch {
+      teardownRecorder();
+      return;
+    }
+    setRecording(true);
+
+    recDurationTimerRef.current = setInterval(() => {
+      setRecDuration((p) => p + 1);
+    }, 1000);
+
+    recMaxDurationTimerRef.current = setTimeout(() => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        toast({
+          title: "Recording limit reached",
+          description: `Recordings are capped at ${MAX_RECORDING_SECONDS} seconds.`,
+        });
+        stopVoiceNote();
+      }
+    }, MAX_RECORDING_SECONDS * 1000);
+  }
+
+  function stopVoiceNote() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    try {
+      recorder.stop();
+    } catch {}
+    setRecording(false);
+  }
+
+  function toggleVoiceNote() {
+    if (transcribing) return;
+    if (recording) stopVoiceNote();
+    else void startVoiceNote();
+  }
 
   const [attributes, setAttributes] = useState<LocalAttribute[]>(
     initialAttributes.map((a) => ({
@@ -199,20 +398,63 @@ export function ProfileEditor({
         <Label htmlFor="notes" className="text-sm font-medium">
           Notes
         </Label>
-        <Textarea
-          id="notes"
-          value={notes}
-          onChange={(e) => {
-            setNotes(e.target.value);
-            setNotesDirty(true);
-          }}
-          placeholder="Add any free-form notes about this person..."
-          /*
-            min-h-[100px] gives enough space on mobile.
-            text-base prevents iOS auto-zoom on focus.
-          */
-          className="min-h-[100px] text-base md:text-sm resize-none"
-        />
+        {/* `relative` wrapper so the voice-note mic can sit at the bottom-right
+            of the textarea without changing the page layout. The textarea has
+            extra bottom padding so typed text never slides under the mic. */}
+        <div className="relative">
+          <Textarea
+            id="notes"
+            value={notes}
+            onChange={(e) => {
+              setNotes(e.target.value);
+              setNotesDirty(true);
+            }}
+            placeholder="Add any free-form notes about this person..."
+            /*
+              min-h-[100px] gives enough space on mobile.
+              text-base prevents iOS auto-zoom on focus.
+              pb-11 reserves room for the absolute-positioned mic.
+            */
+            className="min-h-[100px] text-base md:text-sm resize-none pb-11"
+          />
+
+          {/* Live recording duration — only while the mic is active. */}
+          {recording && (
+            <span
+              className="absolute bottom-3 right-12 text-[11px] tabular-nums"
+              style={{ color: "#5e7983" }}
+            >
+              {formatDuration(recDuration)}
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={toggleVoiceNote}
+            disabled={transcribing}
+            aria-label={
+              recording
+                ? "Stop voice note"
+                : transcribing
+                  ? "Transcribing voice note"
+                  : "Record voice note"
+            }
+            className="absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-70 shadow-sm"
+            style={{
+              background: recording
+                ? "linear-gradient(135deg, #00d4f7, #c84b8a, #482d7c)"
+                : "rgba(220, 202, 255, 0.6)",
+            }}
+          >
+            {transcribing ? (
+              <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#482d7c" }} />
+            ) : recording ? (
+              <MicOff className="w-4 h-4 text-white" />
+            ) : (
+              <Mic className="w-4 h-4" style={{ color: "#482d7c" }} />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Attributes */}
