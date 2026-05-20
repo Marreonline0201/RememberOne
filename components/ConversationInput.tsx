@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getLanguage } from "@/lib/i18n";
 import { localizeKey, cn } from "@/lib/utils";
 
 type Step = "input" | "loading" | "success" | "preview";
@@ -71,6 +72,7 @@ export function ConversationInput({ personId, personName }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const { language, t } = useLanguage();
+  const speechLocale = getLanguage(language).locale;
   const ko = language === "ko";
 
   // person-specific mode
@@ -79,6 +81,11 @@ export function ConversationInput({ personId, personName }: Props) {
   const [step, setStep] = useState<Step>("input");
   const isLoading = step === "loading";
   const [text, setText] = useState("");
+  // Live preview from the browser's Web Speech API — shown in italic while
+  // the user is still speaking. Replaced with Gemini's final transcript on
+  // stop. Web Speech may stop mid-recording on silence (its built-in timeout)
+  // — that's cosmetic only because MediaRecorder is still capturing audio.
+  const [livePartial, setLivePartial] = useState("");
   const [preview, setPreview] = useState<ExtractionPreview | null>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -91,14 +98,34 @@ export function ConversationInput({ personId, personName }: Props) {
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Clean up the mic, the recorder, and any timers on unmount. Guards against
-  // a hot mic surviving a route change.
+  // Web Speech API recognizer (Chrome/Edge/Android WebView). Runs in parallel
+  // with MediaRecorder — both share the WebView's audio plumbing fine, no
+  // conflict. Used ONLY for live-preview display; the authoritative transcript
+  // is always Gemini's on stop.
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  // Finalized segments from Web Speech accumulate here so they don't get
+  // overwritten by the next interim event.
+  const finalsRef = useRef<string[]>([]);
+  // Fallback we keep so that if Gemini transcription fails, we can drop the
+  // last live preview into the text field instead of leaving the user empty-handed.
+  const livePartialRef = useRef("");
+
+  function setLivePartialSync(value: string) {
+    livePartialRef.current = value;
+    setLivePartial(value);
+  }
+
+  // Clean up the mic, the recorder, the live-preview recognizer, and any
+  // timers on unmount. Guards against a hot mic surviving a route change.
   useEffect(() => {
     return () => {
       try {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
           mediaRecorderRef.current.stop();
         }
+      } catch {}
+      try {
+        speechRecognitionRef.current?.abort();
       } catch {}
       audioStreamRef.current?.getTracks().forEach((track) => track.stop());
       audioStreamRef.current = null;
@@ -113,6 +140,74 @@ export function ConversationInput({ personId, personName }: Props) {
       if (MediaRecorder.isTypeSupported(mt)) return mt;
     }
     return undefined;
+  }
+
+  // ── Live preview via Web Speech API (best-effort) ───────────────────────
+  // Starts the browser's built-in recognizer. Updates `livePartial` as the
+  // user speaks. If the browser doesn't support Web Speech (Safari, some
+  // Android WebViews) we silently skip — the duration counter is enough.
+  function startLivePreview() {
+    if (typeof window === "undefined") return;
+    const SR =
+      (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition })
+        .SpeechRecognition ??
+      (window as typeof window & {
+        webkitSpeechRecognition?: typeof SpeechRecognition;
+      }).webkitSpeechRecognition;
+    if (!SR) return;
+
+    finalsRef.current = [];
+    let recognition: SpeechRecognition;
+    try {
+      recognition = new SR();
+    } catch {
+      return;
+    }
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = speechLocale;
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Accumulate finalized segments into finalsRef; recompute the
+      // currently-displayed string as `finals + " " + interim`.
+      let interimText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const segment = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          const trimmed = segment.trim();
+          if (trimmed) finalsRef.current.push(trimmed);
+        } else {
+          interimText += segment;
+        }
+      }
+      const finals = finalsRef.current.join(" ").trim();
+      const interim = interimText.trim();
+      const combined =
+        finals && interim ? finals + " " + interim : finals || interim;
+      setLivePartialSync(combined);
+    };
+
+    recognition.onerror = () => {
+      // Silent: live preview is best-effort. Audio capture continues regardless.
+    };
+    recognition.onend = () => {
+      // Web Speech can end on silence — we DON'T auto-restart. MediaRecorder
+      // is still capturing, and the final Gemini transcript will be correct.
+    };
+
+    speechRecognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      // Already started or unsupported state — give up silently.
+    }
+  }
+
+  function stopLivePreview() {
+    try {
+      speechRecognitionRef.current?.abort();
+    } catch {}
+    speechRecognitionRef.current = null;
   }
 
   function teardownRecorder() {
@@ -130,6 +225,7 @@ export function ConversationInput({ personId, personName }: Props) {
 
   async function startRecording() {
     setDuration(0);
+    setLivePartialSync("");
     audioChunksRef.current = [];
 
     let stream: MediaStream;
@@ -193,6 +289,9 @@ export function ConversationInput({ personId, personName }: Props) {
     }
     setRecording(true);
 
+    // Best-effort live transcript via Web Speech. Independent of MediaRecorder.
+    startLivePreview();
+
     // Tick the duration counter once per second.
     durationTimerRef.current = setInterval(() => {
       setDuration((prev) => prev + 1);
@@ -215,6 +314,11 @@ export function ConversationInput({ personId, personName }: Props) {
   function stopRecording() {
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
+    // Stop the live-preview recognizer first — we keep the last livePartial
+    // visible in italic while Gemini finalizes the real transcript. The
+    // transcribeBlob success path clears it; the failure path keeps it as
+    // a fallback so the user isn't left empty-handed.
+    stopLivePreview();
     try {
       recorder.stop();
     } catch (err) {
@@ -253,6 +357,9 @@ export function ConversationInput({ personId, personName }: Props) {
           const joined = prev ? prev.trimEnd() + " " + newText : newText;
           return joined.slice(0, 4000);
         });
+        // Gemini's transcript is now in `text`. Drop the live preview.
+        setLivePartialSync("");
+        finalsRef.current = [];
       } else {
         toast({
           title: ko ? "음성을 인식하지 못했어요" : "Couldn't hear anything",
@@ -260,9 +367,31 @@ export function ConversationInput({ personId, personName }: Props) {
             ? "다시 시도하거나 직접 입력해 주세요."
             : "Try again or type your note instead.",
         });
+        // Empty Gemini result — promote the Web-Speech preview as a fallback
+        // so the user isn't left staring at nothing.
+        const fallback = livePartialRef.current.trim();
+        if (fallback) {
+          setText((prev) => {
+            const joined = prev ? prev.trimEnd() + " " + fallback : fallback;
+            return joined.slice(0, 4000);
+          });
+        }
+        setLivePartialSync("");
+        finalsRef.current = [];
       }
     } catch (err: unknown) {
       console.error("[transcribe] failed:", err);
+      // Failure path: promote the Web-Speech preview into the text field so
+      // the recording isn't completely lost. User can edit and submit.
+      const fallback = livePartialRef.current.trim();
+      if (fallback) {
+        setText((prev) => {
+          const joined = prev ? prev.trimEnd() + " " + fallback : fallback;
+          return joined.slice(0, 4000);
+        });
+      }
+      setLivePartialSync("");
+      finalsRef.current = [];
       toast({
         title: ko ? "음성 인식 실패" : "Transcription failed",
         description: err instanceof Error ? err.message : t("meet.something_wrong"),
@@ -615,16 +744,28 @@ export function ConversationInput({ personId, personName }: Props) {
           </p>
         )}
 
-        {/* Transcript display */}
-        {text && !recording && (
+        {/* Transcript display — committed text + in-flight live partial */}
+        {(text || livePartial) && (
           <div
             className="relative w-full rounded-[10px_2px_10px_2px] p-4"
             style={{ backgroundColor: "#f0e8ff", border: "1px solid #dccaff" }}
           >
-            <p className="text-sm leading-relaxed text-gray-800 pr-8">{text}</p>
+            <p className="text-sm leading-relaxed text-gray-800 pr-8">
+              {text}
+              {text && livePartial && " "}
+              {livePartial && (
+                <span className="italic" style={{ color: "#7a6b95" }}>
+                  {livePartial}
+                </span>
+              )}
+            </p>
             <button
               type="button"
-              onClick={() => setText("")}
+              onClick={() => {
+                setText("");
+                setLivePartialSync("");
+                finalsRef.current = [];
+              }}
               aria-label="Clear transcript"
               className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-gray-700 transition-colors"
             >
