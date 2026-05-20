@@ -103,34 +103,21 @@ export function ProfileEditor({
   const recDurationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recMaxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Two-track live preview strategy:
-  //
-  //   - On native (Capacitor Android/iOS) we use @capacitor-community/speech-
-  //     recognition. It bridges to Android's SpeechRecognizer service which
-  //     is the reliable, hardware-backed transcription path. Web Speech API
-  //     inside a Chromium WebView is documented-flaky on Android; the native
-  //     plugin avoids those issues entirely.
-  //
-  //   - On the regular web we fall back to webkitSpeechRecognition. Same
-  //     auto-restart-on-silence pattern as ConversationInput.
-  //
-  // MediaRecorder still runs in parallel and provides the authoritative
-  // audio that we ship to Gemini for grammar-polished final transcript on
-  // stop — none of the live-preview machinery touches the notes textarea.
+  // Web Speech API recognizer — mirrors the working pattern in
+  // ConversationInput.tsx exactly. MediaRecorder is authoritative; Web Speech
+  // is best-effort live preview. We deliberately do NOT auto-restart on end
+  // because that's what ConversationInput does and it works reliably on the
+  // same WebView. Audio capture continues regardless.
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const finalsRef = useRef<string[]>([]);
-  // Native plugin listener handles (returned by addListener).
-  const nativePartialListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
-  const nativeStateListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
-  // True while a native session has been started — used to know whether to
-  // call stop() on the plugin (calling stop when nothing is running throws).
-  const nativeActiveRef = useRef(false);
-  // Set while recording is still active. Drives auto-restart logic. We use
-  // a ref (not state) so handler closures always see the latest value.
-  const recordingRef = useRef(false);
-  // Diagnostic surface for the Live preview card — populated when the
-  // recognizer fails so the user can tell what happened.
-  const [speechStatus, setSpeechStatus] = useState<string | null>(null);
+  // Mirror of livePartial state — used to recover the live transcript into
+  // the notes textarea if Gemini's polish call fails on stop.
+  const livePartialRef = useRef("");
+
+  function setLivePartialSync(value: string) {
+    livePartialRef.current = value;
+    setLivePartial(value);
+  }
 
   function teardownRecorder() {
     audioStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -145,140 +132,11 @@ export function ProfileEditor({
     }
   }
 
-  // ── Live preview entrypoint ──────────────────────────────────────────────
-  // Tries the native Capacitor plugin first; falls back to Web Speech API
-  // on the web (or if the native plugin is unavailable / errors).
-  async function startLivePreview() {
-    setSpeechStatus(null);
-
-    // Native plugin path — only on Capacitor platforms.
-    if (typeof window !== "undefined") {
-      try {
-        const { Capacitor } = await import("@capacitor/core");
-        if (Capacitor.isNativePlatform()) {
-          const ok = await startNativeLivePreview();
-          if (ok) return;
-        }
-      } catch (err) {
-        console.warn("[voice-note] Capacitor probe failed:", err);
-      }
-    }
-
-    // Web Speech fallback (web, or native with plugin unavailable).
-    startWebSpeechPreview();
-  }
-
-  // ── Native plugin path ───────────────────────────────────────────────────
-  // Returns true if it took ownership of the live preview (success OR
-  // explicit permission denial — both cases mean "don't fall back").
-  // Returns false only on missing plugin / probe error, so we fall back to
-  // Web Speech.
-  async function startNativeLivePreview(): Promise<boolean> {
-    try {
-      const { SpeechRecognition: NativeSR } = await import(
-        "@capacitor-community/speech-recognition"
-      );
-      const availability = await NativeSR.available();
-      if (!availability.available) return false;
-
-      // Mic permission — request if not yet granted.
-      const perms = await NativeSR.checkPermissions();
-      if (perms.speechRecognition !== "granted") {
-        const req = await NativeSR.requestPermissions();
-        if (req.speechRecognition !== "granted") {
-          setSpeechStatus("permission-denied");
-          return true;
-        }
-      }
-
-      // Stream partial results into the live preview state.
-      const partial = await NativeSR.addListener(
-        "partialResults",
-        (data: { matches?: string[] }) => {
-          const text = (data?.matches?.[0] ?? "").trim();
-          if (text) {
-            setLivePartial(text);
-            setSpeechStatus(null);
-          }
-        }
-      );
-      nativePartialListenerRef.current = partial;
-
-      // Auto-restart when a recognition session ends — Android's
-      // SpeechRecognizer is one-shot per call so we re-arm it as long as
-      // the user is still recording.
-      const stateListener = await NativeSR.addListener(
-        "listeningState",
-        async (data: { status?: string }) => {
-          if (data?.status === "stopped" && recordingRef.current) {
-            try {
-              await NativeSR.start({
-                language: speechLocale,
-                maxResults: 1,
-                partialResults: true,
-                popup: false,
-                prompt: "",
-              });
-            } catch (err) {
-              console.warn("[voice-note] native auto-restart failed:", err);
-            }
-          }
-        }
-      );
-      nativeStateListenerRef.current = stateListener;
-
-      // Initial session.
-      await NativeSR.start({
-        language: speechLocale,
-        maxResults: 1,
-        partialResults: true,
-        popup: false,
-        prompt: "",
-      });
-      nativeActiveRef.current = true;
-      return true;
-    } catch (err) {
-      console.warn("[voice-note] native plugin path failed:", err);
-      // Best-effort cleanup before falling back.
-      try {
-        await nativePartialListenerRef.current?.remove();
-      } catch {}
-      try {
-        await nativeStateListenerRef.current?.remove();
-      } catch {}
-      nativePartialListenerRef.current = null;
-      nativeStateListenerRef.current = null;
-      return false;
-    }
-  }
-
-  async function stopNativeLivePreview() {
-    // Always try to remove listeners — they survive a failed stop().
-    try {
-      await nativePartialListenerRef.current?.remove();
-    } catch {}
-    try {
-      await nativeStateListenerRef.current?.remove();
-    } catch {}
-    nativePartialListenerRef.current = null;
-    nativeStateListenerRef.current = null;
-
-    if (!nativeActiveRef.current) return;
-    nativeActiveRef.current = false;
-    try {
-      const { SpeechRecognition: NativeSR } = await import(
-        "@capacitor-community/speech-recognition"
-      );
-      await NativeSR.stop();
-    } catch (err) {
-      console.warn("[voice-note] native stop failed:", err);
-    }
-  }
-
-  // ── Web Speech fallback ─────────────────────────────────────────────────
-  // Original implementation, kept for web users where the Capacitor plugin
-  // doesn't apply. Same auto-restart-on-silence pattern as before.
-  function startWebSpeechPreview() {
+  // ── Live preview via Web Speech API (best-effort) ───────────────────────
+  // 1:1 mirror of ConversationInput's working pattern. If the WebView
+  // doesn't support webkitSpeechRecognition we silently skip — MediaRecorder
+  // still captures audio and Gemini handles the final transcript on stop.
+  function startLivePreview() {
     if (typeof window === "undefined") return;
     const SR =
       (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition })
@@ -286,21 +144,13 @@ export function ProfileEditor({
       (window as typeof window & {
         webkitSpeechRecognition?: typeof SpeechRecognition;
       }).webkitSpeechRecognition;
-    if (!SR) {
-      console.warn("[voice-note] Web Speech API not available in this browser");
-      setSpeechStatus("unavailable");
-      return;
-    }
+    if (!SR) return;
 
-    // NOTE: do NOT wipe finalsRef here — auto-restart calls back into this
-    // function and we want previously-finalized segments to survive across
-    // restarts. Initial wipe happens in startVoiceNote.
+    finalsRef.current = [];
     let recognition: SpeechRecognition;
     try {
       recognition = new SR();
-    } catch (err) {
-      console.warn("[voice-note] could not create SpeechRecognition:", err);
-      setSpeechStatus("init-failed");
+    } catch {
       return;
     }
     recognition.continuous = true;
@@ -308,6 +158,8 @@ export function ProfileEditor({
     recognition.lang = speechLocale;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Accumulate finalized segments into finalsRef; recompute the
+      // currently-displayed string as `finals + " " + interim`.
       let interimText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const segment = event.results[i][0].transcript;
@@ -320,56 +172,32 @@ export function ProfileEditor({
       }
       const finals = finalsRef.current.join(" ").trim();
       const interim = interimText.trim();
-      setLivePartial(
-        finals && interim ? finals + " " + interim : finals || interim
-      );
-      // Clear any prior diagnostic — we're actively transcribing again.
-      setSpeechStatus(null);
+      const combined =
+        finals && interim ? finals + " " + interim : finals || interim;
+      setLivePartialSync(combined);
     };
 
-    recognition.onerror = (e: Event) => {
-      // The Web Speech spec exposes `.error` on the error event but the
-      // bundled lib.dom types don't include `SpeechRecognitionErrorEvent`,
-      // so we narrow defensively. "no-speech" and "aborted" are normal
-      // lifecycle events on Android; anything else is worth logging.
-      const code = (e as Event & { error?: string }).error ?? "";
-      if (code && code !== "no-speech" && code !== "aborted") {
-        console.warn("[voice-note] recognition error:", code);
-        setSpeechStatus(`error:${code}`);
-      }
+    recognition.onerror = () => {
+      // Silent: live preview is best-effort. Audio capture continues regardless.
     };
-
     recognition.onend = () => {
-      // Android Chromium ends recognition on silence after a few seconds.
-      // Re-arm with a FRESH recognizer rather than reusing the same object,
-      // which the Android WebView's Web Speech impl handles much more
-      // reliably than calling start() on the post-end instance.
-      if (recordingRef.current) {
-        setTimeout(() => {
-          if (recordingRef.current) startWebSpeechPreview();
-        }, 150);
-      }
+      // Web Speech can end on silence — we DON'T auto-restart. MediaRecorder
+      // is still capturing, and the final Gemini transcript will be correct.
     };
 
     speechRecognitionRef.current = recognition;
     try {
       recognition.start();
-    } catch (err) {
-      console.warn("[voice-note] initial recognition.start failed:", err);
-      setSpeechStatus("start-failed");
+    } catch {
+      // Already started or unsupported state — give up silently.
     }
   }
 
   function stopLivePreview() {
-    // Flip recordingRef BEFORE aborting so handlers don't auto-restart.
-    recordingRef.current = false;
-    // Web Speech cleanup
     try {
       speechRecognitionRef.current?.abort();
     } catch {}
     speechRecognitionRef.current = null;
-    // Native plugin cleanup (fire-and-forget — stopVoiceNote is sync).
-    void stopNativeLivePreview();
   }
 
   // Cleanup on unmount: guarantee no hot mic survives a route change.
@@ -422,7 +250,7 @@ export function ProfileEditor({
         setNotesDirty(true);
         // Live preview is no longer needed — Gemini's polished version is now
         // committed to notes.
-        setLivePartial("");
+        setLivePartialSync("");
         finalsRef.current = [];
       } else {
         toast({
@@ -434,7 +262,7 @@ export function ProfileEditor({
         // Fallback: if Gemini returned nothing but Web Speech captured
         // something, promote the live preview into notes so the recording
         // isn't lost.
-        const fallback = livePartial.trim();
+        const fallback = livePartialRef.current.trim();
         if (fallback) {
           setNotes((prev) => {
             const trimmed = prev.trimEnd();
@@ -443,7 +271,7 @@ export function ProfileEditor({
           });
           setNotesDirty(true);
         }
-        setLivePartial("");
+        setLivePartialSync("");
         finalsRef.current = [];
       }
     } catch (err: unknown) {
@@ -472,8 +300,7 @@ export function ProfileEditor({
 
   async function startVoiceNote() {
     setRecDuration(0);
-    setLivePartial("");
-    setSpeechStatus(null);
+    setLivePartialSync("");
     finalsRef.current = [];
     audioChunksRef.current = [];
 
@@ -526,14 +353,9 @@ export function ProfileEditor({
       return;
     }
     setRecording(true);
-    // recordingRef drives auto-restart inside the live-preview handlers —
-    // must be set BEFORE startLivePreview kicks off recognition.
-    recordingRef.current = true;
 
-    // Best-effort live transcript. Independent of MediaRecorder. Async
-    // because it dynamically imports the Capacitor plugin on native; we
-    // don't block startVoiceNote on it.
-    void startLivePreview();
+    // Best-effort live transcript via Web Speech. Independent of MediaRecorder.
+    startLivePreview();
 
     recDurationTimerRef.current = setInterval(() => {
       setRecDuration((p) => p + 1);
@@ -742,23 +564,7 @@ export function ProfileEditor({
               style={{ color: "#5e7983" }}
             >
               {livePartial ||
-                (recording
-                  ? speechStatus === "unavailable"
-                    ? ko
-                      ? "실시간 미리보기를 지원하지 않는 기기입니다 — 녹음은 계속됩니다."
-                      : "Live preview not supported on this device — recording continues."
-                    : speechStatus === "permission-denied"
-                      ? ko
-                        ? "음성 인식 권한이 거부되었습니다 — 녹음은 계속됩니다."
-                        : "Speech recognition permission denied — recording continues."
-                      : speechStatus === "init-failed" || speechStatus === "start-failed"
-                        ? ko
-                          ? "실시간 인식을 시작할 수 없어요 — 녹음은 계속됩니다."
-                          : "Couldn't start live recognition — recording continues."
-                        : ko
-                          ? "듣고 있어요…"
-                          : "Listening…"
-                  : "")}
+                (recording ? (ko ? "듣고 있어요…" : "Listening…") : "")}
             </p>
           </div>
         )}
