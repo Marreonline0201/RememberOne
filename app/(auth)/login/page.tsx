@@ -56,15 +56,14 @@ export default function LoginPage() {
       if (!Capacitor.isNativePlatform()) return;
       import("@capacitor/app").then(({ App }) => {
         const handle = App.addListener("appUrlOpen", async ({ url }) => {
-          // Accept both legacy custom-scheme callbacks and verified
-          // Android App Links hitting /auth/callback. The App Links route
-          // is the preferred one (P1-02) — the custom scheme stays as
-          // fallback until assetlinks.json verification is confirmed.
-          const isCustomScheme = url.startsWith("com.rememberone.app://");
-          const isAppLink = url.startsWith(
-            "https://rememberone.online/auth/callback"
-          );
-          if (!isCustomScheme && !isAppLink) return;
+          // Verified Android App Link only (P1-02). All OAuth callbacks
+          // arrive via https://rememberone.online/auth/callback through
+          // the autoVerify intent filter in AndroidManifest.xml +
+          // /.well-known/assetlinks.json. Legacy custom scheme removed
+          // in v9 after on-device verification confirmed routing.
+          if (!url.startsWith("https://rememberone.online/auth/callback")) {
+            return;
+          }
 
           // Close the system browser / Custom Tab so the user returns to the app view.
           try {
@@ -75,9 +74,7 @@ export default function LoginPage() {
           }
 
           try {
-            const urlObj = new URL(
-              url.replace("com.rememberone.app://", "https://placeholder/")
-            );
+            const urlObj = new URL(url);
             const code = urlObj.searchParams.get("code");
             const errParam = urlObj.searchParams.get("error_description") ??
               urlObj.searchParams.get("error");
@@ -126,8 +123,6 @@ export default function LoginPage() {
         // redirectTo uses the verified Android App Link (P1-02): Android
         // routes the HTTPS callback to this app via the autoVerify intent
         // filter in AndroidManifest.xml + /.well-known/assetlinks.json.
-        // The legacy custom-scheme fallback intent filter is kept in the
-        // manifest until v8+ has rolled out everywhere.
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
