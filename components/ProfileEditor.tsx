@@ -104,9 +104,17 @@ export function ProfileEditor({
   const recMaxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Web Speech API refs — best-effort live preview only. MediaRecorder is the
-  // authoritative capture; Web Speech can drop on silence and we don't care.
+  // authoritative capture; Web Speech can drop on silence and we auto-restart
+  // it as long as we're still recording.
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const finalsRef = useRef<string[]>([]);
+  // Set while recording is still active. Drives onend's auto-restart logic.
+  // We use a ref (not state) so the closure captured by onend always sees the
+  // latest value without rebinding the handler.
+  const recordingRef = useRef(false);
+  // Diagnostic surface for the Live preview card — populated by recognition
+  // .onerror so the user can tell when Web Speech failed (vs just being slow).
+  const [speechStatus, setSpeechStatus] = useState<string | null>(null);
 
   function teardownRecorder() {
     audioStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -122,9 +130,10 @@ export function ProfileEditor({
   }
 
   // ── Live preview via Web Speech API (best-effort) ───────────────────────
-  // Mirrors the pattern in ConversationInput.tsx. Live italic text shown
-  // while the user speaks; cleared on stop when Gemini's polished transcript
-  // takes over and lands in the notes textarea.
+  // The Android Chromium WebView's `webkitSpeechRecognition` reliably ENDS
+  // after a brief silence. We auto-restart inside `onend` as long as we're
+  // still recording — this is the difference between a working live preview
+  // and one that goes blank after the first pause.
   function startLivePreview() {
     if (typeof window === "undefined") return;
     const SR =
@@ -133,13 +142,19 @@ export function ProfileEditor({
       (window as typeof window & {
         webkitSpeechRecognition?: typeof SpeechRecognition;
       }).webkitSpeechRecognition;
-    if (!SR) return;
+    if (!SR) {
+      console.warn("[voice-note] Web Speech API not available in this browser");
+      setSpeechStatus("unavailable");
+      return;
+    }
 
     finalsRef.current = [];
     let recognition: SpeechRecognition;
     try {
       recognition = new SR();
-    } catch {
+    } catch (err) {
+      console.warn("[voice-note] could not create SpeechRecognition:", err);
+      setSpeechStatus("init-failed");
       return;
     }
     recognition.continuous = true;
@@ -162,17 +177,56 @@ export function ProfileEditor({
       setLivePartial(
         finals && interim ? finals + " " + interim : finals || interim
       );
+      // Clear any prior diagnostic — we're actively transcribing again.
+      setSpeechStatus(null);
     };
-    recognition.onerror = () => {};
-    recognition.onend = () => {};
+
+    recognition.onerror = (e: Event) => {
+      // The Web Speech spec exposes `.error` on the error event but the
+      // bundled lib.dom types don't include `SpeechRecognitionErrorEvent`,
+      // so we narrow defensively. "no-speech" and "aborted" are normal
+      // lifecycle events on Android; anything else is worth logging.
+      const code = (e as Event & { error?: string }).error ?? "";
+      if (code && code !== "no-speech" && code !== "aborted") {
+        console.warn("[voice-note] recognition error:", code);
+        setSpeechStatus(`error:${code}`);
+      }
+    };
+
+    recognition.onend = () => {
+      // Android Chromium ends recognition on silence after a few seconds.
+      // Auto-restart as long as we're still recording so the user keeps
+      // seeing live text across pauses.
+      if (recordingRef.current) {
+        try {
+          recognition.start();
+        } catch (err) {
+          // "InvalidStateError" can fire if start is called too rapidly;
+          // a small retry covers that.
+          console.warn("[voice-note] restart failed, retrying:", err);
+          setTimeout(() => {
+            if (recordingRef.current) {
+              try {
+                recognition.start();
+              } catch {}
+            }
+          }, 250);
+        }
+      }
+    };
 
     speechRecognitionRef.current = recognition;
     try {
       recognition.start();
-    } catch {}
+    } catch (err) {
+      console.warn("[voice-note] initial recognition.start failed:", err);
+      setSpeechStatus("start-failed");
+    }
   }
 
   function stopLivePreview() {
+    // Flip recordingRef BEFORE calling abort so onend doesn't auto-restart.
+    recordingRef.current = false;
     try {
       speechRecognitionRef.current?.abort();
     } catch {}
@@ -280,6 +334,7 @@ export function ProfileEditor({
   async function startVoiceNote() {
     setRecDuration(0);
     setLivePartial("");
+    setSpeechStatus(null);
     finalsRef.current = [];
     audioChunksRef.current = [];
 
@@ -332,6 +387,9 @@ export function ProfileEditor({
       return;
     }
     setRecording(true);
+    // recordingRef drives onend auto-restart — must be set BEFORE
+    // startLivePreview kicks off recognition.
+    recordingRef.current = true;
 
     // Best-effort live transcript via Web Speech. Independent of MediaRecorder.
     startLivePreview();
@@ -544,9 +602,17 @@ export function ProfileEditor({
             >
               {livePartial ||
                 (recording
-                  ? ko
-                    ? "듣고 있어요…"
-                    : "Listening…"
+                  ? speechStatus === "unavailable"
+                    ? ko
+                      ? "실시간 미리보기를 지원하지 않는 기기입니다 — 녹음은 계속됩니다."
+                      : "Live preview not supported on this device — recording continues."
+                    : speechStatus === "init-failed" || speechStatus === "start-failed"
+                      ? ko
+                        ? "실시간 인식을 시작할 수 없어요 — 녹음은 계속됩니다."
+                        : "Couldn't start live recognition — recording continues."
+                      : ko
+                        ? "듣고 있어요…"
+                        : "Listening…"
                   : "")}
             </p>
           </div>
