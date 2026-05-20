@@ -5,10 +5,19 @@ import { Download, X as XIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // Minimum Android versionCode users must be on. Anything lower triggers
-// the banner on app launch. Bump this constant after each Play release
-// whose changes can't be hot-reloaded via the Capacitor server.url web
-// bundle. Keep in sync with android/app/build.gradle.
-const MIN_BUILD = 10;
+// the banner on app launch.
+//
+// CRITICAL — DO NOT BUMP THIS AHEAD OF PLAY STORE.
+// The JS bundle is hot-deployed via Vercel within ~1 min of every push, so
+// raising MIN_BUILD here BEFORE the matching .aab is actually live on Play
+// makes the banner appear to users whose Play Store still shows the old
+// version as current. They tap Update, see no update available, get
+// confused. Sequence must be:
+//   1. Build + upload .aab with the new versionCode
+//   2. Wait for it to ROLL OUT on Play Store (production/your track)
+//   3. THEN bump this constant and push the JS change to Vercel
+// Keep in sync with android/app/build.gradle but only AFTER step 2.
+const MIN_BUILD = 9;
 
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.rememberone.app";
