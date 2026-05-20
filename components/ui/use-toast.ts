@@ -7,7 +7,10 @@ import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 const TOAST_LIMIT = 5;
 const TOAST_REMOVE_DELAY = 1000000;
 
-type ToasterToast = ToastProps & {
+// Omit the native HTML `title` attribute from ToastProps before adding our
+// own — HTMLAttributes.title is `string`, which intersects with ReactNode and
+// silently collapses the field to `string`. Omitting it lets us pass JSX.
+type ToasterToast = Omit<ToastProps, "title"> & {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;

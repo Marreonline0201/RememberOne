@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { Download } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Minimum Android versionCode users must be on. Anything lower triggers
 // the "Update available" toast on app launch. Bump this constant after
@@ -20,6 +22,8 @@ const SESSION_MS = 24 * 60 * 60 * 1000;
 
 export function NativeUpdatePrompt() {
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const ko = language === "ko";
   const shownRef = useRef(false);
 
   useEffect(() => {
@@ -37,13 +41,42 @@ export function NativeUpdatePrompt() {
 
         shownRef.current = true;
         toast({
-          title: "Update available",
-          description:
-            "A newer version of RememberOne is on the Play Store with important security improvements. Please update.",
+          // Branded container: matches the lavender card gradient used
+          // throughout the app (52deg #d0f2ff → #dccaff), asymmetric
+          // 10/2 corner radius, no default border, soft shadow.
+          className: "border-0 shadow-md",
+          style: {
+            background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
+            borderRadius: "10px 2px 10px 2px",
+          },
+          title: (
+            <span className="flex items-center gap-2">
+              <Download className="w-4 h-4 shrink-0" style={{ color: "#284e72" }} />
+              <span
+                className="text-[14px] uppercase tracking-wide"
+                style={{
+                  color: "#284e72",
+                  fontFamily: "'Hammersmith One', sans-serif",
+                }}
+              >
+                {ko ? "업데이트 안내" : "Update available"}
+              </span>
+            </span>
+          ),
+          description: (
+            <span
+              className="block text-[12px] leading-relaxed mt-1"
+              style={{ color: "#5e7983" }}
+            >
+              {ko
+                ? "보안 개선이 포함된 새 버전이 Play 스토어에 있습니다. 업데이트해 주세요."
+                : "A newer version with security improvements is on the Play Store. Please update."}
+            </span>
+          ),
           duration: SESSION_MS,
           action: (
             <ToastAction
-              altText="Open Play Store"
+              altText={ko ? "Play 스토어 열기" : "Open Play Store"}
               onClick={async () => {
                 try {
                   const { Browser } = await import("@capacitor/browser");
@@ -52,8 +85,16 @@ export function NativeUpdatePrompt() {
                   window.location.href = PLAY_STORE_URL;
                 }
               }}
+              // Match the app's primary-action button: navy→purple gradient,
+              // 10/2 corner radius, white Hammersmith One text.
+              className="border-0 text-white h-9 px-4 hover:opacity-90"
+              style={{
+                background: "linear-gradient(to right, #284e72, #482d7c)",
+                borderRadius: "10px 2px 10px 2px",
+                fontFamily: "'Hammersmith One', sans-serif",
+              }}
             >
-              Update
+              {ko ? "업데이트" : "Update"}
             </ToastAction>
           ),
         });
@@ -61,7 +102,7 @@ export function NativeUpdatePrompt() {
         console.warn("[update-prompt] version check failed:", err);
       }
     })();
-  }, [toast]);
+  }, [toast, ko]);
 
   return null;
 }
