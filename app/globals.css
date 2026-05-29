@@ -131,41 +131,57 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Attention animations for the in-app update prompt ─────────────────── */
-/* Used by components/native-update-prompt.tsx. Strategy: box-shadow is the
-   most universally smooth-animated CSS property across WebView versions
-   (Android Chromium has historically been flaky animating background-
-   position on a gradient). We layer two shadows into a single animation:
-     - an outer purple halo that ramps from soft (.22 alpha) to strong
-       (.55 alpha) with the blur growing from 14px → 28px,
-     - a 4px purple ring drawn via the second shadow's spread that fades
-       in and out around the entire toast.
-   Together they create an unmistakable "alive" pulse without conflicting
-   with Radix's swipe-gesture transforms. Respects reduced-motion. */
-@keyframes update-prompt-flash {
-  /* Symmetric pulse only — y-offset & blur of the base shadow are CONSTANT
-     so the toast doesn't appear to move downward. Only the ring (spread)
-     and the opacities grow/shrink. */
-  0%, 100% {
-    box-shadow:
-      0 4px 14px 0 rgba(72, 45, 124, 0.30),
-      0 0 0 0 rgba(196, 165, 255, 0);
-  }
-  50% {
-    box-shadow:
-      0 4px 14px 0 rgba(72, 45, 124, 0.50),
-      0 0 0 5px rgba(196, 165, 255, 0.55);
-  }
+/* ── Attention animation for the in-app update prompt ──────────────────── */
+/* Used by components/native-update-prompt.tsx. The banner draws attention
+   with a flowing gradient (cyan ↔ lavender) that sweeps diagonally.
+
+   Implementation note: we do NOT animate `background-position` — Android
+   Chromium WebView has historically been flaky animating it. Instead a
+   `repeating-linear-gradient` layer is panned with `transform: translateX`,
+   which is GPU-accelerated and smooth across WebView versions. The pattern is
+   truly periodic (300px), and we translate by exactly one period, so the loop
+   realigns identically every cycle — no visible jump/teleport. */
+@keyframes update-prompt-sweep {
+  from { transform: translateX(-300px); }
+  to   { transform: translateX(0); } /* pan by EXACTLY one gradient period → seamless; flows left→right */
 }
 
 .update-prompt-attention {
-  background-image: linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%);
-  animation: update-prompt-flash 1.6s ease-in-out infinite;
+  position: relative;
+  overflow: hidden; /* clip the wide moving layer to the rounded corners */
+  background-color: #d0f2ff; /* fallback before the gradient layer paints */
+  box-shadow: 0 4px 14px 0 rgba(72, 45, 124, 0.30); /* static depth, no pulse */
+}
+
+.update-prompt-attention::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  /* Extra 300px (one period) of width so panning left by 300px never exposes an edge. */
+  width: calc(100% + 300px);
+  z-index: 0;
+  /* Truly periodic pattern (period = 300px). Panning by exactly 300px realigns it
+     identically, so the loop has no visible jump. cyan ↔ lavender, soft palette. */
+  background: repeating-linear-gradient(
+    to right,
+    #d0f2ff 0px,
+    #dccaff 150px,
+    #d0f2ff 300px
+  );
+  animation: update-prompt-sweep 3s linear infinite;
+  will-change: transform;
+}
+
+/* Keep the banner's content above the moving gradient layer. */
+.update-prompt-attention > * {
+  position: relative;
+  z-index: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .update-prompt-attention {
+  .update-prompt-attention::before {
     animation: none;
-    box-shadow: 0 4px 14px 0 rgba(72, 45, 124, 0.35);
   }
 }
