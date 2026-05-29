@@ -146,6 +146,23 @@ const keys: Translations = {
     en: "Interest",
     ko: "관심사",
   },
+  // Person card long-press action menu
+  "card.share": { en: "Share", ko: "공유" },
+  "card.edit": { en: "Edit", ko: "수정" },
+  "card.delete": { en: "Delete", ko: "삭제" },
+  "confirm.delete_title": {
+    en: "Delete this person?",
+    ko: "이 사람을 삭제할까요?",
+  },
+  "confirm.delete_body": {
+    en: "This permanently removes their info, family, interests, and meeting history. This can't be undone.",
+    ko: "정보, 가족, 관심사, 만남 기록이 영구적으로 삭제됩니다. 되돌릴 수 없어요.",
+  },
+  "confirm.yes": { en: "Yes", ko: "네" },
+  "confirm.no": { en: "No", ko: "아니요" },
+  "toast.deleted": { en: "Deleted", ko: "삭제됨" },
+  "toast.delete_failed": { en: "Delete failed", ko: "삭제 실패" },
+  "toast.copied": { en: "Copied to clipboard", ko: "클립보드에 복사됨" },
   // Meet / ConversationInput page
   "meet.instruction": {
     en: "Speak \"I met Mike this morning. He has a son named Jake and he is 10 years old. He is attending Stony Brook University.\"",
