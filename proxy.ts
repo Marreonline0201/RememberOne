@@ -1,11 +1,12 @@
-// Supabase Auth Middleware
-// Refreshes the user session on every request and redirects
-// unauthenticated users away from protected routes
+// Supabase Auth Proxy (was middleware.ts — renamed for Next 16; "middleware"
+// is deprecated in favor of "proxy", which runs on the Node.js runtime).
+// Refreshes the user session on every request and redirects unauthenticated
+// users away from protected routes.
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });

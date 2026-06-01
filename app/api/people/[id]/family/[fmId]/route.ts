@@ -5,12 +5,13 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 interface Params {
-  params: { id: string; fmId: string };
+  params: Promise<{ id: string; fmId: string }>;
 }
 
-export async function PATCH(request: Request, { params }: Params) {
+export async function PATCH(request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -60,9 +61,10 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(_request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

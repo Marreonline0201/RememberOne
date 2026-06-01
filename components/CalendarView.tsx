@@ -9,6 +9,7 @@ import { formatDate, formatRelativeDate, localizeKey } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
 import { RecapLine } from "@/components/RecapLine";
+import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import type { PersonFull, UpcomingMeetingAlert as UpcomingAlertType } from "@/types/app";
 
 interface CalendarEntry {
@@ -42,12 +43,7 @@ function toDateKey(year: number, month: number, day: number): string {
 function ConnectCalendarBannerInner({ ko }: { ko: boolean }) {
   const searchParams = useSearchParams();
   const error = searchParams.get("calendar_error");
-  const [connecting, setConnecting] = useState(false);
-
-  function handleConnect() {
-    setConnecting(true);
-    window.location.href = "/api/calendar/connect";
-  }
+  const { connect, connecting } = useCalendarConnect();
 
   return (
     <div
@@ -87,7 +83,7 @@ function ConnectCalendarBannerInner({ ko }: { ko: boolean }) {
       </div>
 
       <button
-        onClick={handleConnect}
+        onClick={connect}
         disabled={connecting}
         className="w-full py-2.5 rounded-xl text-[13px] font-medium text-white transition-opacity active:opacity-80 disabled:opacity-60"
         style={{ background: "linear-gradient(90deg, #5e7983, #9b7fda)" }}

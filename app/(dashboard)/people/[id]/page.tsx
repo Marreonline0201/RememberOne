@@ -26,11 +26,12 @@ function isInterest(key: string) {
 }
 
 interface Props {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: Props) {
-  const supabase = createClient();
+export async function generateMetadata(props: Props) {
+  const params = await props.params;
+  const supabase = await createClient();
   const { data } = await supabase
     .from("people")
     .select("name")
@@ -41,8 +42,9 @@ export async function generateMetadata({ params }: Props) {
   };
 }
 
-export default async function PersonPage({ params }: Props) {
-  const supabase = createClient();
+export default async function PersonPage(props: Props) {
+  const params = await props.params;
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -8,7 +8,7 @@ import { T } from "@/components/T";
 import Link from "next/link";
 
 export default async function DashboardPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 

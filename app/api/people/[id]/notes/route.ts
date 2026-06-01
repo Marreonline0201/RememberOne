@@ -17,12 +17,13 @@ const RequestSchema = z.object({
 });
 
 interface Params {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export async function POST(request: Request, { params }: Params) {
+export async function POST(request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

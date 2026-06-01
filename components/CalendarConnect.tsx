@@ -4,11 +4,12 @@
 // Shown on the dashboard when no calendar is connected.
 // Mobile-first: stacked layout on narrow screens, horizontal on sm+.
 
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, ExternalLink } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useCalendarConnect } from "@/lib/use-calendar-connect";
 
 // Inner component reads search params — must be inside a Suspense boundary.
 function CalendarConnectInner() {
@@ -16,12 +17,7 @@ function CalendarConnectInner() {
   const connected = searchParams.get("calendar_connected") === "true";
   const error = searchParams.get("calendar_error");
 
-  const [connecting, setConnecting] = useState(false);
-
-  function handleConnect() {
-    setConnecting(true);
-    window.location.href = "/api/calendar/connect";
-  }
+  const { connect, connecting } = useCalendarConnect();
 
   if (connected) return null;
 
@@ -51,7 +47,7 @@ function CalendarConnectInner() {
 
           {/* Connect button */}
           <Button
-            onClick={handleConnect}
+            onClick={connect}
             disabled={connecting}
             className="w-full sm:w-auto h-11 sm:h-9 gap-1.5 shrink-0"
           >

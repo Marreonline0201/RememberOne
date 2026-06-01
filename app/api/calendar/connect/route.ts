@@ -12,28 +12,51 @@ import { getAuthUrl } from "@/lib/google-calendar";
 import { randomBytes } from "crypto";
 
 export async function GET(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Native (Capacitor) clients can't open Google's OAuth page inside the
+  // WebView — Google's "use secure browsers" policy blocks it
+  // (disallowed_useragent). So the app calls this with ?mode=native, opens the
+  // returned URL in Chrome Custom Tabs, and Google redirects back through the
+  // verified /auth/callback app link. The token exchange then happens in
+  // /api/calendar/exchange (called from the WebView, which has the session).
+  const isNative = request.nextUrl.searchParams.get("mode") === "native";
+
   if (!user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return isNative
+      ? NextResponse.json({ error: "unauthorized" }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", request.url));
   }
 
-  const state = randomBytes(32).toString("hex");
+  // Native returns must re-enter the app via the only verified Android App
+  // Link (/auth/callback); the "cal_" prefix lets the app's appUrlOpen handler
+  // tell a calendar return apart from a Supabase login return.
+  const state = (isNative ? "cal_" : "") + randomBytes(32).toString("hex");
 
-  // Derive the callback URL from the actual request so preview deployments,
-  // custom domains, and localhost all work without an env var.
-  const redirectUri = new URL("/api/calendar/callback", request.url).toString();
+  // Web: derive the callback from the request (works on previews/localhost).
+  // Native: must be the registered app-link HTTPS URL.
+  const redirectUri = isNative
+    ? "https://rememberone.online/auth/callback"
+    : new URL("/api/calendar/callback", request.url).toString();
 
-  const response = NextResponse.redirect(getAuthUrl(state, redirectUri));
-  response.cookies.set("oauth_state", state, {
+  const authUrl = getAuthUrl(state, redirectUri);
+
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     maxAge: 600,
     path: "/",
-  });
+  };
+
+  // CSRF state cookie is set on the WebView (this request) and verified by the
+  // same WebView on /api/calendar/exchange — the Custom Tab never needs it.
+  const response = isNative
+    ? NextResponse.json({ url: authUrl })
+    : NextResponse.redirect(authUrl);
+  response.cookies.set("oauth_state", state, cookieOptions);
   return response;
 }

@@ -13,7 +13,7 @@ import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 export async function POST(request: Request) {
   try {
     // 1. Authenticate
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

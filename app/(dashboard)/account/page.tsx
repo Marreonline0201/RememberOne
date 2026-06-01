@@ -5,7 +5,7 @@ import { AccountPage } from "@/components/AccountPage";
 export const metadata = { title: "Account — RememberOne" };
 
 export default async function Account() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

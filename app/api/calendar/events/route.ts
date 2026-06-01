@@ -13,7 +13,7 @@ import type { PersonFull, UpcomingMeetingAlert } from "@/types/app";
 
 export async function GET() {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -131,7 +131,7 @@ export async function GET() {
 // DELETE /api/calendar/events — disconnect calendar
 export async function DELETE() {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

@@ -21,12 +21,13 @@ const UpdatePersonSchema = z.object({
 });
 
 interface Params {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(_request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -47,9 +48,10 @@ export async function GET(_request: Request, { params }: Params) {
   }
 }
 
-export async function PUT(request: Request, { params }: Params) {
+export async function PUT(request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -105,9 +107,10 @@ export async function PUT(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(_request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

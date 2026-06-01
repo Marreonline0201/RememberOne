@@ -28,9 +28,8 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["@google/generative-ai"],
-  },
+  // Renamed from experimental.serverComponentsExternalPackages in Next 15+.
+  serverExternalPackages: ["@google/generative-ai"],
   images: {
     remotePatterns: [
       {

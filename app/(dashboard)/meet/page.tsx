@@ -10,15 +10,16 @@ export const metadata: Metadata = {
 };
 
 interface Props {
-  searchParams: { personId?: string };
+  searchParams: Promise<{ personId?: string }>;
 }
 
-export default async function MeetPage({ searchParams }: Props) {
+export default async function MeetPage(props: Props) {
+  const searchParams = await props.searchParams;
   let targetPersonId: string | undefined;
   let targetPersonName: string | undefined;
 
   if (searchParams.personId) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data } = await supabase
       .from("people")
       .select("id, name")

@@ -15,10 +15,10 @@ const DeleteSchema = z.object({
 });
 
 interface Params {
-  params: { id: string; fmId: string };
+  params: Promise<{ id: string; fmId: string }>;
 }
 
-async function verifyOwnership(supabase: ReturnType<typeof createClient>, personId: string, fmId: string, userId: string) {
+async function verifyOwnership(supabase: Awaited<ReturnType<typeof createClient>>, personId: string, fmId: string, userId: string) {
   const { data: fm } = await supabase
     .from("family_members")
     .select("id, person_id, people!inner(user_id)")
@@ -32,9 +32,10 @@ async function verifyOwnership(supabase: ReturnType<typeof createClient>, person
   return fm;
 }
 
-export async function POST(request: Request, { params }: Params) {
+export async function POST(request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
 
@@ -63,9 +64,10 @@ export async function POST(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(request: Request, { params }: Params) {
+export async function DELETE(request: Request, props: Params) {
+  const params = await props.params;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
 

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
   // Authorization: derive the target user from the authenticated session,
   // not from the URL. This is what prevents cross-user token poisoning.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

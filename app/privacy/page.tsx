@@ -8,7 +8,7 @@ export default async function PrivacyPolicy() {
   // Read language from user metadata if logged in; fallback to English.
   let lang: LanguageCode = "en";
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.user_metadata?.language === "ko") lang = "ko";
   } catch {

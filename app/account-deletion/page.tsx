@@ -22,7 +22,7 @@ export default async function AccountDeletionPage() {
   // Best-effort locale: read from session if available, otherwise English.
   let lang: LanguageCode = "en";
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
