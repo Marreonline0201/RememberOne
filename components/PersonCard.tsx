@@ -5,7 +5,7 @@
 // Mic button at bottom-left → /meet?person=Name (quick log meeting).
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mic } from "lucide-react";
 import { capitalize, localizeKey, localizeRelation, formatRelativeDate, asOfLabel } from "@/lib/utils";
 import type { PersonFull } from "@/types/app";
@@ -54,6 +54,11 @@ export function PersonCard({ person }: Props) {
 
   function handlePointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return; // primary button / touch only
+    // Clear any stale suppress flag left over from a previous long-press whose
+    // trailing click landed on the menu backdrop (so handleClick never ran to
+    // reset it). Without this, the first normal tap after using the menu would
+    // be swallowed. Reset at the start of every fresh press.
+    suppressClickRef.current = false;
     startRef.current = { x: e.clientX, y: e.clientY };
     clearTimer();
     timerRef.current = setTimeout(() => {
@@ -82,6 +87,14 @@ export function PersonCard({ person }: Props) {
       suppressClickRef.current = false;
     }
   }
+
+  // Cancel a pending long-press timer if the card unmounts mid-press (e.g. the
+  // list re-renders after a delete) so the timeout can't fire on a dead card.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   return (
     <div className="relative">

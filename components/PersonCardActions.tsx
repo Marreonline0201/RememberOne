@@ -121,8 +121,8 @@ export function PersonCardActions({ person, open, onOpenChange }: Props) {
     try {
       await navigator.clipboard.writeText(text);
       toast({ title: t("toast.copied") });
-    } catch {
-      // nothing else we can do
+    } catch (err) {
+      console.warn("[person-card] share + clipboard both failed:", err);
     }
   }
 
@@ -135,12 +135,23 @@ export function PersonCardActions({ person, open, onOpenChange }: Props) {
     startTransition(async () => {
       try {
         const res = await fetch(`/api/people/${person.id}`, { method: "DELETE" });
-        const json = await res.json();
-        if (!res.ok || json.error) throw new Error(json.error || "Delete failed");
+        // Check status BEFORE parsing: a 5xx may return an HTML body, and
+        // res.json() on that throws a confusing SyntaxError into the toast.
+        if (!res.ok) {
+          let message = "Delete failed";
+          try {
+            const j = await res.json();
+            if (j?.error) message = j.error;
+          } catch {
+            // non-JSON error body (e.g. a proxy/cold-start HTML page)
+          }
+          throw new Error(message);
+        }
         setConfirmOpen(false);
         toast({ title: t("toast.deleted"), description: person.name });
         router.refresh();
       } catch (err: unknown) {
+        console.error("[person-card] delete failed:", err);
         toast({
           title: t("toast.delete_failed"),
           description: err instanceof Error ? err.message : "Unknown error",
