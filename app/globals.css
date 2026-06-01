@@ -131,6 +131,16 @@ body {
   overflow-x: hidden;
 }
 
+/* Stop the browser's native HTML5 link/image drag on press-and-hold (touch).
+   Pairs with draggable={false} + onDragStart preventDefault on the element so
+   a long-press doesn't "drag the URL out" and cancel our long-press timer. */
+.no-native-drag {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  user-drag: none;
+}
+
 /* ── Attention animation for the in-app update prompt ──────────────────── */
 /* Used by components/native-update-prompt.tsx. The banner draws attention
    with a flowing gradient (cyan ↔ lavender) that sweeps diagonally.

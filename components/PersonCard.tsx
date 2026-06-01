@@ -102,12 +102,18 @@ export function PersonCard({ person }: Props) {
           (LONG_PRESS_MS) opens the Share/Edit/Delete menu. */}
       <Link
         href={`/people/${person.id}`}
-        className="block p-4 pb-16 transition-opacity active:opacity-90 select-none"
+        className="block p-4 pb-16 transition-opacity active:opacity-90 select-none no-native-drag"
+        // On touch, pressing-and-holding a link triggers the browser's native
+        // link-drag ("drags the URL out") which also cancels our long-press
+        // timer so the menu never opens. draggable=false + onDragStart kill it;
+        // the no-native-drag class adds -webkit-user-drag:none as a backstop.
+        draggable={false}
         style={{
           borderRadius: "10px 2px 10px 2px",
           background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
           WebkitTouchCallout: "none",
           WebkitUserSelect: "none",
+          WebkitTapHighlightColor: "transparent",
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -116,6 +122,7 @@ export function PersonCard({ person }: Props) {
         onPointerLeave={endPress}
         onClick={handleClick}
         onContextMenu={(e) => e.preventDefault()}
+        onDragStart={(e) => e.preventDefault()}
       >
         {/* Header: person name + "last met" */}
         <div className="flex items-start justify-between gap-3">
