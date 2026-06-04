@@ -1,16 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { clearNativeSession } from "@/lib/native-auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check } from "lucide-react";
+import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search } from "lucide-react";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useTimezone } from "@/contexts/TimezoneContext";
 import { languages, type LanguageCode } from "@/lib/i18n";
+
+// Fallback if the WebView lacks Intl.supportedValuesOf (Chrome <99).
+const FALLBACK_ZONES = [
+  "UTC", "Asia/Seoul", "Asia/Tokyo", "Asia/Shanghai", "Asia/Singapore",
+  "Asia/Kolkata", "Europe/London", "Europe/Paris", "Europe/Berlin",
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "Australia/Sydney",
+];
 
 interface Props {
   user: SupabaseUser;
@@ -20,10 +29,31 @@ export function AccountPage({ user }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { language, setLanguage, t } = useLanguage();
+  const { timezone, mode: tzMode, value: tzValue, setMode: setTzMode, setTimezone } = useTimezone();
   const [signingOut, setSigningOut] = useState(false);
   const [policyOpen, setPolicyOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [savingLang, setSavingLang] = useState(false);
+  const [tzOpen, setTzOpen] = useState(false);
+  const [tzQuery, setTzQuery] = useState("");
+
+  const allZones = useMemo<string[]>(() => {
+    try {
+      const supported = (Intl as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
+      if (typeof supported === "function") return supported("timeZone");
+    } catch {
+      // fall through
+    }
+    return FALLBACK_ZONES;
+  }, []);
+
+  const filteredZones = useMemo(() => {
+    const q = tzQuery.trim().toLowerCase();
+    if (!q) return allZones;
+    return allZones.filter((z) => z.toLowerCase().replace(/_/g, " ").includes(q.replace(/_/g, " ")));
+  }, [allZones, tzQuery]);
+
+  const autoOn = tzMode === "auto";
 
   async function handleLanguageChange(code: LanguageCode) {
     if (code === language) { setLangOpen(false); return; }
@@ -135,6 +165,117 @@ export function AccountPage({ user }: Props) {
                 </button>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Settings — Timezone */}
+      <div
+        className="rounded-[10px_2px_10px_2px] border overflow-hidden"
+        style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}
+      >
+        <button
+          onClick={() => setTzOpen((o) => !o)}
+          className="flex items-center justify-between w-full h-11 px-4 text-sm transition-opacity active:opacity-80"
+          style={{ color: "#284e72" }}
+        >
+          <span className="flex items-center gap-3">
+            <Globe className="w-4 h-4 shrink-0" />
+            {t("account.timezone")}
+          </span>
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+              {timezone.replace(/_/g, " ")}
+              {autoOn ? ` · ${t("timezone.auto_short")}` : ""}
+            </span>
+            {tzOpen ? (
+              <ChevronUp className="w-4 h-4 shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 shrink-0" />
+            )}
+          </span>
+        </button>
+
+        {tzOpen && (
+          <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: "#dccaff" }}>
+            {/* Auto toggle */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium" style={{ color: "#284e72" }}>
+                  {t("timezone.auto")}
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: "#5e7983" }}>
+                  {t("timezone.auto_hint")}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoOn}
+                aria-label={t("timezone.auto")}
+                onClick={() => setTzMode(autoOn ? "manual" : "auto")}
+                className="relative shrink-0 w-11 h-6 rounded-full transition-colors"
+                style={{ backgroundColor: autoOn ? "#284e72" : "#cdbce8" }}
+              >
+                <span
+                  className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                  style={{ transform: autoOn ? "translateX(20px)" : "translateX(0)" }}
+                />
+              </button>
+            </div>
+
+            {/* Searchable list — dimmed/disabled when Auto is on */}
+            <div
+              className={autoOn ? "opacity-50 pointer-events-none select-none" : ""}
+              aria-disabled={autoOn}
+            >
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                  style={{ color: "#5e7983" }}
+                />
+                <input
+                  type="text"
+                  value={tzQuery}
+                  onChange={(e) => setTzQuery(e.target.value)}
+                  disabled={autoOn}
+                  placeholder={t("timezone.search_placeholder")}
+                  className="w-full h-10 pl-9 pr-3 text-sm rounded-[8px_2px_8px_2px] border outline-none"
+                  style={{ borderColor: "#dccaff", backgroundColor: "white", color: "#284e72" }}
+                />
+              </div>
+
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-[8px_2px_8px_2px] border" style={{ borderColor: "#dccaff" }}>
+                {filteredZones.length === 0 ? (
+                  <p className="text-[12px] px-3 py-3" style={{ color: "#5e7983" }}>
+                    {t("timezone.none_found")}
+                  </p>
+                ) : (
+                  filteredZones.map((zone) => {
+                    const isSelected = !autoOn && (tzValue ?? timezone) === zone;
+                    return (
+                      <button
+                        key={zone}
+                        type="button"
+                        disabled={autoOn}
+                        onClick={() => {
+                          setTimezone(zone);
+                          setTzOpen(false);
+                        }}
+                        className="flex items-center justify-between w-full px-3 py-2 text-left text-[13px] transition-colors active:opacity-80"
+                        style={{
+                          color: "#284e72",
+                          backgroundColor: isSelected ? "#e8f4ff" : "white",
+                        }}
+                      >
+                        <span className="truncate">{zone.replace(/_/g, " ")}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0" style={{ color: "#284e72" }} />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

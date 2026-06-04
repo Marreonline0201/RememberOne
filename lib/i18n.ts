@@ -163,6 +163,16 @@ const keys: Translations = {
   "toast.deleted": { en: "Deleted", ko: "삭제됨" },
   "toast.delete_failed": { en: "Delete failed", ko: "삭제 실패" },
   "toast.copied": { en: "Copied to clipboard", ko: "클립보드에 복사됨" },
+  // Timezone setting (account page) + calendar
+  "account.timezone": { en: "Timezone", ko: "시간대" },
+  "timezone.auto": { en: "Auto (use device timezone)", ko: "자동 (기기 시간대 사용)" },
+  "timezone.auto_short": { en: "Auto", ko: "자동" },
+  "timezone.auto_hint": {
+    en: "Calendar times follow this timezone.",
+    ko: "캘린더 시간이 이 시간대를 따릅니다.",
+  },
+  "timezone.search_placeholder": { en: "Search timezone…", ko: "시간대 검색…" },
+  "timezone.none_found": { en: "No matching timezone", ko: "일치하는 시간대 없음" },
   // Meet / ConversationInput page
   "meet.instruction": {
     en: "Speak \"I met Mike this morning. He has a son named Jake and he is 10 years old. He is attending Stony Brook University.\"",

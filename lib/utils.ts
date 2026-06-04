@@ -33,6 +33,64 @@ export function formatTime(dateStr: string | null | undefined): string {
   }
 }
 
+// ── Timezone-aware helpers ──────────────────────────────────────────────────
+// These render an absolute instant (ISO string) in an EXPLICIT IANA timezone,
+// instead of the runtime/device zone. Used by the calendar so event times and
+// day placement follow the user's chosen timezone, not the server's.
+
+// Format a datetime as a short time (e.g. "2:30 PM" / "오후 2:30") in `timeZone`.
+export function formatTimeInZone(
+  dateStr: string | null | undefined,
+  timeZone: string,
+  locale = "en-US"
+): string {
+  if (!dateStr) return "";
+  // All-day events arrive as a date-only string ("2026-06-05") with no clock
+  // time — there's no meaningful time to show.
+  if (!dateStr.includes("T")) return "";
+  try {
+    const date = parseISO(dateStr);
+    if (!isValid(date)) return "";
+    return new Intl.DateTimeFormat(locale, {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return "";
+  }
+}
+
+// Return the YYYY-MM-DD calendar day that `dateStr` falls on IN `timeZone`.
+// en-CA formats as "2026-06-01", which is exactly the key shape the calendar uses.
+export function dateKeyInZone(
+  dateStr: string | null | undefined,
+  timeZone: string
+): string {
+  if (!dateStr) return "";
+  // All-day events arrive as a date-only string ("2026-06-05") that is already
+  // a calendar day and timezone-agnostic. Projecting it into a zone would parse
+  // it as local midnight and wrongly shift the day, so return it verbatim.
+  if (!dateStr.includes("T")) return dateStr.slice(0, 10);
+  try {
+    const date = parseISO(dateStr);
+    if (!isValid(date)) return typeof dateStr === "string" ? dateStr.slice(0, 10) : "";
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  } catch {
+    return typeof dateStr === "string" ? dateStr.slice(0, 10) : "";
+  }
+}
+
+// Today's YYYY-MM-DD in `timeZone`.
+export function todayKeyInZone(timeZone: string): string {
+  return dateKeyInZone(new Date().toISOString(), timeZone);
+}
+
 // Get initials from a name for avatar fallback
 export function getInitials(name: string): string {
   return name

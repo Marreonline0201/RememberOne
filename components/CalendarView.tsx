@@ -2,11 +2,12 @@
 
 // CalendarView — monthly grid calendar with meeting dots and upcoming event indicators.
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { formatDate, formatRelativeDate, localizeKey } from "@/lib/utils";
+import { formatDate, formatRelativeDate, localizeKey, formatTimeInZone, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useTimezone } from "@/contexts/TimezoneContext";
 import { getLanguage } from "@/lib/i18n";
 import { RecapLine } from "@/components/RecapLine";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
@@ -107,11 +108,13 @@ function ConnectCalendarBanner({ ko }: { ko: boolean }) {
 // ── CalendarView ─────────────────────────────────────────────
 export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props) {
   const { language } = useLanguage();
+  const { timezone } = useTimezone();
   const locale = getLanguage(language).locale;
   const ko = language === "ko";
 
   const today = new Date();
-  const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+  // "Today" highlight uses the user's chosen timezone, not the device/server zone.
+  const todayKey = todayKeyInZone(timezone);
 
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1)
@@ -119,6 +122,16 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
   const [selectedDate, setSelectedDate] = useState<string | null>(todayKey);
   const [upcomingAlerts, setUpcomingAlerts] = useState<UpcomingAlertType[]>([]);
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
+
+  // autoTimezone is null on first render, so todayKey starts as the UTC day and
+  // the initial selectedDate freezes on it. Once the real zone resolves (or the
+  // user changes it), move the default selection to the new "today" — but only
+  // if the user hasn't manually tapped a different day.
+  const lastAutoTodayRef = useRef(todayKey);
+  useEffect(() => {
+    setSelectedDate((cur) => (cur === lastAutoTodayRef.current ? todayKey : cur));
+    lastAutoTodayRef.current = todayKey;
+  }, [todayKey]);
 
   // Fetch upcoming Google Calendar events for dot markers
   useEffect(() => {
@@ -134,7 +147,7 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
 
   const upcomingByDate = new Map<string, UpcomingAlertType[]>();
   for (const alert of upcomingAlerts) {
-    const dateKey = alert.event.start.slice(0, 10);
+    const dateKey = dateKeyInZone(alert.event.start, timezone);
     if (!upcomingByDate.has(dateKey)) upcomingByDate.set(dateKey, []);
     upcomingByDate.get(dateKey)!.push(alert);
   }
@@ -322,11 +335,8 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
           </button>
 
           {upcomingExpanded && upcomingAlerts.map((alert) => {
-            const eventDate = alert.event.start.slice(0, 10);
-            const eventTime = new Date(alert.event.start).toLocaleTimeString(locale, {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
+            const eventDate = dateKeyInZone(alert.event.start, timezone);
+            const eventTime = formatTimeInZone(alert.event.start, timezone, locale);
 
             return (
               <div
