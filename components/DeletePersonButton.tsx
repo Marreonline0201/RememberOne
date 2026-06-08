@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { Trash2, Loader2 } from "lucide-react";
+import { queuedFetch } from "@/lib/offline-queue";
 
 interface Props {
   personId: string;
@@ -32,7 +33,7 @@ export function DeletePersonButton({ personId, personName }: Props) {
   async function handleDelete() {
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/people/${personId}`, {
+        const res = await queuedFetch(`/api/people/${personId}`, {
           method: "DELETE",
         });
         const json = await res.json();
@@ -43,7 +44,6 @@ export function DeletePersonButton({ personId, personName }: Props) {
           description: `${personName} has been removed.`,
         });
         router.push("/");
-        router.refresh();
       } catch (err: unknown) {
         toast({
           title: "Delete failed",

@@ -19,6 +19,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { localizeKey, localizeRelation } from "@/lib/utils";
+import { queuedFetch } from "@/lib/offline-queue";
 import type { PersonFull } from "@/types/app";
 
 interface Props {
@@ -134,7 +135,7 @@ export function PersonCardActions({ person, open, onOpenChange }: Props) {
   function handleDelete() {
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/people/${person.id}`, { method: "DELETE" });
+        const res = await queuedFetch(`/api/people/${person.id}`, { method: "DELETE" });
         // Check status BEFORE parsing: a 5xx may return an HTML body, and
         // res.json() on that throws a confusing SyntaxError into the toast.
         if (!res.ok) {
@@ -149,7 +150,6 @@ export function PersonCardActions({ person, open, onOpenChange }: Props) {
         }
         setConfirmOpen(false);
         toast({ title: t("toast.deleted"), description: person.name });
-        router.refresh();
       } catch (err: unknown) {
         console.error("[person-card] delete failed:", err);
         toast({

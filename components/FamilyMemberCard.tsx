@@ -3,7 +3,6 @@
 // FamilyMemberCard — displays one family member with inline editing and delete.
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -13,6 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Trash2, Loader2, Pencil, Check, X, Plus } from "lucide-react";
 import { getInitials, capitalize, localizeKey, localizeRelation, asOfLabel } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { queuedFetch } from "@/lib/offline-queue";
 import type { FamilyMemberFull } from "@/types/app";
 
 interface Props {
@@ -45,7 +45,6 @@ interface AttrRow {
 }
 
 export function FamilyMemberCard({ familyMember, personId }: Props) {
-  const router = useRouter();
   const { toast } = useToast();
   const { language } = useLanguage();
   const [deleting, setDeleting] = useState(false);
@@ -80,7 +79,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
       const base = `/api/people/${personId}/family/${familyMember.id}`;
 
       // 1. Update name / relation / notes
-      const res = await fetch(base, {
+      const res = await queuedFetch(base, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), relation: relation.trim(), notes: notes.trim() }),
@@ -94,7 +93,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
         .filter((k) => !attrs.some((a) => a.originalKey === k));
 
       for (const key of removedKeys) {
-        await fetch(`${base}/attributes`, {
+        await queuedFetch(`${base}/attributes`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key }),
@@ -106,13 +105,13 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
         if (!attr.key.trim() || !attr.value.trim()) continue;
         // If key was renamed, delete the old key first
         if (attr.originalKey && attr.originalKey !== attr.key.trim()) {
-          await fetch(`${base}/attributes`, {
+          await queuedFetch(`${base}/attributes`, {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ key: attr.originalKey }),
           });
         }
-        await fetch(`${base}/attributes`, {
+        await queuedFetch(`${base}/attributes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: attr.key.trim(), value: attr.value.trim() }),
@@ -120,9 +119,7 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
       }
 
       toast({ title: language === "ko" ? "저장됨" : "Updated" });
-      setEditing(false);
-      router.refresh();
-    } catch (err: unknown) {
+      setEditing(false);    } catch (err: unknown) {
       toast({
         title: language === "ko" ? "저장 실패" : "Failed to update",
         description: err instanceof Error ? err.message : language === "ko" ? "문제가 발생했어요" : "Something went wrong",
@@ -149,14 +146,12 @@ export function FamilyMemberCard({ familyMember, personId }: Props) {
     }
     setDeleting(true);
     try {
-      const res = await fetch(`/api/people/${personId}/family/${familyMember.id}`, {
+      const res = await queuedFetch(`/api/people/${personId}/family/${familyMember.id}`, {
         method: "DELETE",
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Delete failed");
-      toast({ title: language === "ko" ? `${familyMember.name} 삭제됨` : `${familyMember.name} removed` });
-      router.refresh();
-    } catch (err: unknown) {
+      toast({ title: language === "ko" ? `${familyMember.name} 삭제됨` : `${familyMember.name} removed` });    } catch (err: unknown) {
       toast({
         title: language === "ko" ? "삭제 실패" : "Failed to delete",
         description: err instanceof Error ? err.message : language === "ko" ? "문제가 발생했어요" : "Something went wrong",

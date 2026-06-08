@@ -32,7 +32,7 @@ export async function POST(request: Request, props: Params) {
     }
 
     const body = await request.json();
-    const { name, relation, notes } = body;
+    const { id, name, relation, notes } = body;
 
     if (!name?.trim() || !relation?.trim()) {
       return NextResponse.json(
@@ -44,6 +44,9 @@ export async function POST(request: Request, props: Params) {
     const { data: fm, error: insertError } = await supabase
       .from("family_members")
       .insert({
+        // Accept an optional client-supplied UUID so a family member created
+        // offline keeps the same id after its queued write replays.
+        ...(typeof id === "string" && id ? { id } : {}),
         person_id: params.id,
         name: name.trim(),
         relation: relation.trim(),

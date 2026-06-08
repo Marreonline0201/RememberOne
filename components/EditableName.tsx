@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { Pencil, Check, X, Loader2 } from "lucide-react";
+import { queuedFetch } from "@/lib/offline-queue";
 
 interface Props {
   personId: string;
@@ -11,7 +11,6 @@ interface Props {
 }
 
 export function EditableName({ personId, initialName }: Props) {
-  const router = useRouter();
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(initialName);
@@ -24,15 +23,15 @@ export function EditableName({ personId, initialName }: Props) {
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/people/${personId}`, {
+      const res = await queuedFetch(`/api/people/${personId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim() }),
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Update failed");
+      setName(name.trim());
       setEditing(false);
-      router.refresh();
     } catch (err: unknown) {
       toast({
         title: "Failed to update name",
@@ -94,7 +93,7 @@ export function EditableName({ personId, initialName }: Props) {
         className="text-[28px] leading-tight text-black"
         style={{ fontFamily: "'Hammersmith One', sans-serif" }}
       >
-        {initialName}
+        {name}
       </h1>
       <button
         onClick={() => setEditing(true)}

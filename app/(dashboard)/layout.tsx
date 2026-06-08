@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardNav } from "@/components/DashboardNav";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { OfflineSyncProvider } from "@/components/OfflineSyncProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { TimezoneProvider } from "@/contexts/TimezoneContext";
 
@@ -35,6 +36,7 @@ export default async function DashboardLayout({
           */}
           <main className="max-w-5xl mx-auto px-5 pt-safe-header pb-24 md:px-8 md:pt-6 md:pb-10">
             <OfflineBanner />
+            <OfflineSyncProvider />
             {children}
           </main>
         </div>

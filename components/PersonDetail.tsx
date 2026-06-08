@@ -1,19 +1,24 @@
 "use client";
 
-// Client-rendered person detail. Loads the person from the IndexedDB cache
-// (instant + offline-capable) and, when online, refreshes from /api/people/[id]
-// and re-caches. Online shows the full editable page; offline shows a read-only
-// view (editing needs the network). This lets ANY person open offline — even
-// ones never opened before — because the data came from the home snapshot.
+// Client-rendered person detail. Loads from the local store (instant + offline)
+// and refreshes from /api/people/[id] when online (skipping the refresh while
+// writes are pending so it can't clobber un-synced edits). Editing works
+// OFFLINE via the write queue; only the AI flows (Log meeting, AI quick-note,
+// voice transcription) stay online-only.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mic } from "lucide-react";
 import type { PersonFull } from "@/types/app";
-import { getCachedPerson, cachePerson } from "@/lib/offline-cache";
+import {
+  getCachedPerson,
+  cachePerson,
+  subscribeOffline,
+  outboxCount,
+} from "@/lib/offline-cache";
 import { useOnline } from "@/lib/use-online";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { getInitials, localizeKey } from "@/lib/utils";
+import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { EditableName } from "@/components/EditableName";
 import { ProfileEditor } from "@/components/ProfileEditor";
@@ -43,16 +48,22 @@ export function PersonDetail({ id }: { id: string }) {
   useEffect(() => {
     let cancelled = false;
     setStatus("loading");
-    (async () => {
-      // 1. Cache first — instant, works offline.
+
+    const loadFromCache = async () => {
       const cached = await getCachedPerson(id);
-      if (!cancelled && cached) {
+      if (cancelled) return;
+      if (cached) {
         setPerson(cached);
         setStatus("ready");
       }
-      // 2. Online: refresh from the server and re-cache.
+    };
+
+    (async () => {
+      await loadFromCache();
+      // Refresh from the server only when online AND nothing is queued (so we
+      // never overwrite optimistic offline edits that haven't synced yet).
       let fetchedOk = false;
-      if (typeof navigator !== "undefined" && navigator.onLine) {
+      if (typeof navigator !== "undefined" && navigator.onLine && (await outboxCount()) === 0) {
         try {
           const res = await fetch(`/api/people/${id}`);
           if (res.ok) {
@@ -65,13 +76,22 @@ export function PersonDetail({ id }: { id: string }) {
             }
           }
         } catch {
-          /* network error — rely on cache */
+          /* offline / network error — rely on cache */
         }
       }
-      if (!cancelled && !cached && !fetchedOk) setStatus("missing");
+      if (!cancelled) {
+        const stillCached = await getCachedPerson(id);
+        if (!stillCached && !fetchedOk) setStatus("missing");
+      }
     })();
+
+    // Re-render whenever the local store changes (optimistic edits, sync).
+    const unsub = subscribeOffline(() => {
+      void loadFromCache();
+    });
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [id]);
 
@@ -134,16 +154,7 @@ export function PersonDetail({ id }: { id: string }) {
           </Avatar>
 
           <div className="flex-1 min-w-0">
-            {online ? (
-              <EditableName personId={person.id} initialName={person.name} />
-            ) : (
-              <h1
-                className="text-[24px] text-black leading-tight break-words"
-                style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-              >
-                {person.name}
-              </h1>
-            )}
+            <EditableName personId={person.id} initialName={person.name} />
 
             {person.meetings.length > 0 && (
               <PersonLastMet
@@ -152,7 +163,6 @@ export function PersonDetail({ id }: { id: string }) {
               />
             )}
 
-            {/* Main info chips */}
             {mainInfo.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {mainInfo.map((attr) => (
@@ -169,9 +179,7 @@ export function PersonDetail({ id }: { id: string }) {
             )}
           </div>
 
-          {online && (
-            <DeletePersonButton personId={person.id} personName={person.name} />
-          )}
+          <DeletePersonButton personId={person.id} personName={person.name} />
         </div>
 
         {/* Interests */}
@@ -197,7 +205,7 @@ export function PersonDetail({ id }: { id: string }) {
           </div>
         )}
 
-        {/* Recap — most recent meeting summary */}
+        {/* Recap */}
         {person.meetings.length > 0 && person.meetings[0].summary && (
           <RecapLine
             summary={person.meetings[0].summary}
@@ -207,10 +215,9 @@ export function PersonDetail({ id }: { id: string }) {
         )}
       </div>
 
-      {/* ── Editable sections — online only (need the network) ─────────────── */}
+      {/* ── AI flows — online only (Log meeting + AI quick-note) ───────────── */}
       {online && (
         <>
-          {/* Log another meeting */}
           <Link
             href={`/meet?personId=${person.id}`}
             className="flex items-center justify-center gap-2 w-full h-12 rounded-[10px_2px_10px_2px] text-white transition-opacity active:opacity-80"
@@ -222,91 +229,51 @@ export function PersonDetail({ id }: { id: string }) {
             </span>
           </Link>
 
-          {/* Add notes / voice input */}
           <div
             className="p-4 rounded-[10px_2px_10px_2px]"
             style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
           >
             <AddNotesInput personId={person.id} personName={person.name} />
           </div>
-
-          {/* Edit attributes */}
-          <div
-            className="p-4 rounded-[10px_2px_10px_2px]"
-            style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
-          >
-            <p
-              className="text-[13px] uppercase mb-3"
-              style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
-            >
-              <T k="person.edit_details" />
-            </p>
-            <ProfileEditor
-              personId={person.id}
-              initialAttributes={person.attributes}
-              initialNotes={person.notes ?? ""}
-            />
-          </div>
         </>
       )}
 
-      {/* ── Family members ────────────────────────────────────────────────── */}
-      {(online || person.family_members.length > 0) && (
-        <div
-          className="p-4 rounded-[10px_2px_10px_2px]"
-          style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      {/* ── Edit attributes + notes (works offline) ───────────────────────── */}
+      <div
+        className="p-4 rounded-[10px_2px_10px_2px]"
+        style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      >
+        <p
+          className="text-[13px] uppercase mb-3"
+          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
         >
-          <p
-            className="text-[13px] uppercase mb-3"
-            style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
-          >
-            <T k="person.family_section" />
-          </p>
-          <div className="space-y-3">
-            {online ? (
-              <>
-                {person.family_members.map((fm) => (
-                  <FamilyMemberCard key={fm.id} familyMember={fm} personId={person.id} />
-                ))}
-                <AddFamilyMemberForm personId={person.id} />
-              </>
-            ) : (
-              person.family_members.map((fm) => (
-                <div
-                  key={fm.id}
-                  className="rounded-[8px_2px_8px_2px] p-3"
-                  style={{ backgroundColor: "#fff", border: "1px solid #e7dcff" }}
-                >
-                  <div className="flex items-baseline gap-2">
-                    <span
-                      className="text-[15px] text-black"
-                      style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-                    >
-                      {fm.name}
-                    </span>
-                    <span className="text-[11px]" style={{ color: "#5e7983" }}>
-                      {fm.relation}
-                    </span>
-                  </div>
-                  {fm.attributes.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {fm.attributes.map((a) => (
-                        <span
-                          key={a.id}
-                          className="text-[10px] px-2 py-[3px] rounded-[5px] text-black"
-                          style={{ backgroundColor: "rgba(220, 202, 255, 0.7)" }}
-                        >
-                          {localizeKey(a.key, language)}: {a.value}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
+          <T k="person.edit_details" />
+        </p>
+        <ProfileEditor
+          personId={person.id}
+          initialAttributes={person.attributes}
+          initialNotes={person.notes ?? ""}
+        />
+      </div>
+
+      {/* ── Family members (works offline) ────────────────────────────────── */}
+      <div
+        className="p-4 rounded-[10px_2px_10px_2px]"
+        style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      >
+        <p
+          className="text-[13px] uppercase mb-3"
+          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+        >
+          <T k="person.family_section" />
+        </p>
+        <div className="space-y-3">
+          {person.family_members.map((fm) => (
+            <FamilyMemberCard key={fm.id} familyMember={fm} personId={person.id} />
+          ))}
+          <AddFamilyMemberForm personId={person.id} />
         </div>
-      )}
+      </div>
 
       {/* ── Meeting history (read-only) ───────────────────────────────────── */}
       <MeetingHistory meetings={person.meetings} />

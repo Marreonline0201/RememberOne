@@ -22,7 +22,7 @@ const injectKeyframe = (() => {
 // On md+ the key and value fields appear side-by-side.
 
 import { useState, useTransition, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { queuedFetch } from "@/lib/offline-queue";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,7 +76,6 @@ export function ProfileEditor({
 }: Props) {
   injectKeyframe();
   const { toast } = useToast();
-  const router = useRouter();
   const { language } = useLanguage();
   const ko = language === "ko";
   const speechLocale = getLanguage(language).locale;
@@ -598,7 +597,7 @@ export function ProfileEditor({
 
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/people/${personId}`, {
+        const res = await queuedFetch(`/api/people/${personId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -623,7 +622,6 @@ export function ProfileEditor({
         setNotesDirty(false);
 
         toast({ title: "Saved", description: "Profile updated successfully." });
-        router.refresh();
       } catch (err: unknown) {
         toast({
           title: "Save failed",

@@ -1,16 +1,16 @@
-// Home — shows all saved people with notification alert at top.
+// Home — fetches people server-side as the initial seed; the list itself renders
+// from the local offline store (PeopleListClient) so it works offline and
+// reflects queued edits/deletes.
 
 import { createClient } from "@/lib/supabase/server";
 import { getAllPeopleFull } from "@/lib/people";
-import { PeopleGrid } from "@/components/PeopleGrid";
-import { UpcomingMeetingAlert } from "@/components/UpcomingMeetingAlert";
-import { CachePeopleSync } from "@/components/CachePeopleSync";
-import { T } from "@/components/T";
-import Link from "next/link";
+import { PeopleListClient } from "@/components/PeopleListClient";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return null;
 
   const people = await getAllPeopleFull(supabase, user.id);
@@ -22,48 +22,9 @@ export default async function DashboardPage() {
     .maybeSingle();
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-4">
-      {/* Snapshot all people into IndexedDB for offline person-detail viewing */}
-      <CachePeopleSync people={people} />
-
-      {/* Upcoming meeting notification */}
-      {calendarConnection && people.length > 0 && (
-        <UpcomingMeetingAlert />
-      )}
-
-      {/* People list */}
-      {people.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center gap-5">
-          <div
-            className="w-24 h-24 rounded-full flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #d0f2ff, #dccaff)" }}
-          >
-            <span className="text-4xl">👋</span>
-          </div>
-          <div>
-            <p
-              className="text-[22px] uppercase text-black"
-              style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-            >
-              <T k="home.empty_title" />
-            </p>
-            <p className="text-[13px] mt-2 max-w-xs" style={{ color: "#5e7983" }}>
-              <T k="home.empty_body" />
-            </p>
-          </div>
-          <Link
-            href="/meet"
-            className="h-12 px-8 rounded-[10px_2px_10px_2px] text-white flex items-center gap-2 transition-opacity active:opacity-80"
-            style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
-          >
-            <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-              <T k="home.log_first" />
-            </span>
-          </Link>
-        </div>
-      ) : (
-        <PeopleGrid people={people} />
-      )}
-    </div>
+    <PeopleListClient
+      initialPeople={people}
+      hasCalendarConnection={!!calendarConnection}
+    />
   );
 }

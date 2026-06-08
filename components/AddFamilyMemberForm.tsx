@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus, Loader2, Check, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { queuedFetch, newId } from "@/lib/offline-queue";
 
 interface Props {
   personId: string;
 }
 
 export function AddFamilyMemberForm({ personId }: Props) {
-  const router = useRouter();
   const { toast } = useToast();
   const { language } = useLanguage();
   const isKo = language === "ko";
@@ -27,10 +26,15 @@ export function AddFamilyMemberForm({ personId }: Props) {
     if (!name.trim() || !relation.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/people/${personId}/family`, {
+      const res = await queuedFetch(`/api/people/${personId}/family`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), relation: relation.trim(), notes: notes.trim() || null }),
+        body: JSON.stringify({
+          id: newId(), // stable id so offline edits/deletes to this member replay
+          name: name.trim(),
+          relation: relation.trim(),
+          notes: notes.trim() || null,
+        }),
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Failed to add");
@@ -38,8 +42,8 @@ export function AddFamilyMemberForm({ personId }: Props) {
       setName("");
       setRelation("");
       setNotes("");
-      // Keep the form open so another member can be added right away
-      router.refresh();
+      // Keep the form open so another member can be added right away.
+      // The list re-renders from the local store automatically.
     } catch (err: unknown) {
       toast({
         title: isKo ? "추가 실패" : "Failed to add",
