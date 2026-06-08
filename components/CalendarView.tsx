@@ -2,7 +2,7 @@
 
 // CalendarView — monthly grid calendar with meeting dots and upcoming event indicators.
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDate, formatRelativeDate, localizeKey, formatTimeInZone, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { useTimezone } from "@/contexts/TimezoneContext";
 import { getLanguage } from "@/lib/i18n";
 import { RecapLine } from "@/components/RecapLine";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
+import { useDeviceCalendar } from "@/lib/use-device-calendar";
 import type { PersonFull, UpcomingMeetingAlert as UpcomingAlertType } from "@/types/app";
 
 interface CalendarEntry {
@@ -105,6 +106,64 @@ function ConnectCalendarBanner({ ko }: { ko: boolean }) {
   );
 }
 
+// ── Phone (device) calendar prompt — native only ─────────────
+function DeviceCalendarPrompt({
+  ko,
+  onConnect,
+  busy,
+}: {
+  ko: boolean;
+  onConnect: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div
+      className="p-4 flex flex-col gap-3"
+      style={{
+        borderRadius: "10px 2px 10px 2px",
+        background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-lg"
+          style={{ background: "rgba(255,255,255,0.6)" }}
+        >
+          📱
+        </div>
+        <div className="flex-1">
+          <p
+            className="text-[15px] text-black leading-tight"
+            style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+          >
+            {ko ? "휴대폰 캘린더 사용" : "Use your phone calendar"}
+          </p>
+          <p className="text-[11px] mt-1 leading-relaxed" style={{ color: "#5e7983" }}>
+            {ko
+              ? "이 휴대폰의 예정된 일정을 저장된 사람과 자동으로 연결해요."
+              : "Match upcoming events on this phone to your saved people."}
+          </p>
+        </div>
+      </div>
+
+      <button
+        onClick={onConnect}
+        disabled={busy}
+        className="w-full py-2.5 rounded-xl text-[13px] font-medium text-white transition-opacity active:opacity-80 disabled:opacity-60"
+        style={{ background: "linear-gradient(90deg, #5e7983, #9b7fda)" }}
+      >
+        {busy
+          ? ko
+            ? "연결 중..."
+            : "Connecting..."
+          : ko
+          ? "휴대폰 캘린더 연결"
+          : "Connect phone calendar"}
+      </button>
+    </div>
+  );
+}
+
 // ── CalendarView ─────────────────────────────────────────────
 export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props) {
   const { language } = useLanguage();
@@ -120,8 +179,16 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
     () => new Date(today.getFullYear(), today.getMonth(), 1)
   );
   const [selectedDate, setSelectedDate] = useState<string | null>(todayKey);
-  const [upcomingAlerts, setUpcomingAlerts] = useState<UpcomingAlertType[]>([]);
+  const [googleAlerts, setGoogleAlerts] = useState<UpcomingAlertType[]>([]);
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
+
+  // Device (phone) calendar — native only. Matches on-device events to people,
+  // independent of the Google connection. Enabled only when there are people.
+  const {
+    alerts: deviceAlerts,
+    status: deviceStatus,
+    connect: connectDevice,
+  } = useDeviceCalendar(hasPeople);
 
   // autoTimezone is null on first render, so todayKey starts as the UTC day and
   // the initial selectedDate freezes on it. Once the real zone resolves (or the
@@ -138,9 +205,27 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
     if (!hasCalendarConnection || !hasPeople) return;
     fetch("/api/calendar/events")
       .then((r) => r.json())
-      .then(({ data }) => { if (Array.isArray(data)) setUpcomingAlerts(data); })
+      .then(({ data }) => { if (Array.isArray(data)) setGoogleAlerts(data); })
       .catch(() => {});
   }, [hasCalendarConnection, hasPeople]);
+
+  // Merge Google + device-calendar alerts. Dedupe so a phone that syncs the
+  // same Google event doesn't double-list it (key = title + start minute),
+  // then sort chronologically.
+  const upcomingAlerts = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: UpcomingAlertType[] = [];
+    for (const a of [...googleAlerts, ...deviceAlerts]) {
+      const key = `${a.event.summary.trim().toLowerCase()}|${a.event.start.slice(0, 16)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(a);
+    }
+    merged.sort(
+      (x, y) => new Date(x.event.start).getTime() - new Date(y.event.start).getTime()
+    );
+    return merged;
+  }, [googleAlerts, deviceAlerts]);
 
   // Build fast lookup structures
   const meetingDates = new Set(groups.map((g) => g.dateKey));
@@ -300,7 +385,7 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
               {ko ? "만남 기록" : "Past meeting"}
             </span>
           </div>
-          {hasCalendarConnection && (
+          {(hasCalendarConnection || upcomingAlerts.length > 0) && (
             <div className="flex items-center gap-1.5">
               <span className="w-[5px] h-[5px] rounded-full inline-block" style={{ backgroundColor: "#9b7fda" }} />
               <span className="text-[10px]" style={{ color: "#5e7983" }}>
@@ -314,6 +399,18 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
       {/* ── Google Calendar connect prompt ── */}
       {!hasCalendarConnection && (
         <ConnectCalendarBanner ko={ko} />
+      )}
+
+      {/* ── Phone calendar prompt (native only, when not yet granted) ── */}
+      {hasPeople && deviceStatus === "prompt" && (
+        <DeviceCalendarPrompt ko={ko} onConnect={connectDevice} busy={false} />
+      )}
+      {hasPeople && deviceStatus === "denied" && (
+        <p className="text-[11px] px-1" style={{ color: "#5e7983" }}>
+          {ko
+            ? "휴대폰 캘린더 권한이 거부되었습니다. 설정에서 허용하면 일정이 연결됩니다."
+            : "Phone calendar permission was denied. Enable it in Settings to match phone events."}
+        </p>
       )}
 
       {/* ── Upcoming meetings (always shown right below calendar) ── */}

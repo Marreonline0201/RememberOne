@@ -277,10 +277,10 @@ const keys: Translations = {
     en: "When you log a meeting, the text you provide is sent to an AI service (Gemini) to extract structured information. This text is processed to provide the service and is not used to train AI models.",
     ko: "미팅을 기록할 때 입력한 텍스트는 구조화된 정보 추출을 위해 AI 서비스(Gemini)로 전송됩니다. 이 텍스트는 서비스 제공 목적으로만 처리되며 AI 모델 훈련에 사용되지 않습니다.",
   },
-  "privacy.calendar.title": { en: "Google Calendar", ko: "구글 캘린더" },
+  "privacy.calendar.title": { en: "Calendar access", ko: "캘린더 접근" },
   "privacy.calendar.body": {
-    en: "If you connect Google Calendar, we access your calendar events only to show upcoming meeting reminders within the app. We do not store or share your calendar data.",
-    ko: "구글 캘린더를 연결하면 앱 내 예정 미팅 알림 표시를 위해서만 캘린더 이벤트에 접근합니다. 캘린더 데이터는 저장하거나 공유하지 않습니다.",
+    en: "If you connect Google Calendar, or grant calendar permission on your phone, we read upcoming events only to match them to people you've saved and show meeting reminders within the app. Phone calendar events are read on your device, used only for matching, and are never stored on our servers or shared. You can revoke access at any time.",
+    ko: "구글 캘린더를 연결하거나 휴대폰 캘린더 권한을 허용하면, 예정된 일정을 저장된 사람과 연결하고 앱 내 미팅 알림을 표시하기 위해서만 일정을 읽습니다. 휴대폰 캘린더 일정은 기기에서 읽어 연결에만 사용하며, 서버에 저장하거나 공유하지 않습니다. 언제든지 권한을 해제할 수 있습니다.",
   },
   "privacy.storage.title": { en: "Data storage", ko: "데이터 보관" },
   "privacy.storage.body": {

@@ -5,11 +5,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchUpcomingEvents } from "@/lib/google-calendar";
-import { getAllPeople } from "@/lib/people";
-import { getPersonFull } from "@/lib/people";
-import { eventMentionsPerson } from "@/lib/utils";
+import { matchEventsToPeople } from "@/lib/calendar-match";
 import { decryptToken, decryptTokenOptional, encryptToken } from "@/lib/crypto";
-import type { PersonFull, UpcomingMeetingAlert } from "@/types/app";
 
 export async function GET() {
   try {
@@ -74,49 +71,8 @@ export async function GET() {
         .eq("id", connection.id);
     }
 
-    // Get all saved people (summary only for matching)
-    const people = await getAllPeople(supabase, user.id);
-
-    if (people.length === 0 || events.length === 0) {
-      return NextResponse.json({ data: [], error: null });
-    }
-
-    // Match events to people
-    const alerts: UpcomingMeetingAlert[] = [];
-
-    for (const event of events) {
-      const matchedPeopleIds: string[] = [];
-
-      for (const person of people) {
-        const nameMatch = eventMentionsPerson(
-          event.summary,
-          event.description,
-          person.name
-        );
-
-        const attendeeMatch = event.attendees.some(
-          (a) =>
-            a.displayName &&
-            eventMentionsPerson("", a.displayName, person.name)
-        );
-
-        if (nameMatch || attendeeMatch) {
-          matchedPeopleIds.push(person.id);
-        }
-      }
-
-      if (matchedPeopleIds.length > 0) {
-        // Fetch full profiles for matched people
-        const matchedPeopleFull = await Promise.all(
-          matchedPeopleIds.map((id) => getPersonFull(supabase, id, user.id))
-        );
-
-        alerts.push({
-          event,
-          matchedPeople: matchedPeopleFull.filter((p): p is PersonFull => p !== null),
-        });
-      }
-    }
+    // Match events to saved people (shared with the device-calendar source)
+    const alerts = await matchEventsToPeople(supabase, user.id, events);
 
     return NextResponse.json({ data: alerts, error: null });
   } catch (err: unknown) {
