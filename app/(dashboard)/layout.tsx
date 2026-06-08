@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardNav } from "@/components/DashboardNav";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { TimezoneProvider } from "@/contexts/TimezoneContext";
 
@@ -33,6 +34,7 @@ export default async function DashboardLayout({
             On md+ the bottom bar is hidden, so we reset to pb-8.
           */}
           <main className="max-w-5xl mx-auto px-5 pt-safe-header pb-24 md:px-8 md:pt-6 md:pb-10">
+            <OfflineBanner />
             {children}
           </main>
         </div>

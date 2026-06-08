@@ -34,6 +34,7 @@ import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
 import { localizeKey, cn } from "@/lib/utils";
+import { useOnline } from "@/lib/use-online";
 
 type Step = "input" | "loading" | "success" | "preview";
 
@@ -74,6 +75,7 @@ export function ConversationInput({ personId, personName }: Props) {
   const { language, t } = useLanguage();
   const speechLocale = getLanguage(language).locale;
   const ko = language === "ko";
+  const online = useOnline();
 
   // person-specific mode
   const isPerson = !!(personId && personName);
@@ -585,6 +587,33 @@ export function ConversationInput({ personId, personName }: Props) {
     setText("");
     setPreview(null);
     setStep("input");
+  }
+
+  // ── OFFLINE ─────────────────────────────────────────────────────────────
+  // Logging needs the network (audio → Gemini transcription + extraction), so
+  // when offline we don't let the user record into a dead end — show why.
+  if (!online) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center"
+          style={{ background: "linear-gradient(135deg, #d0f2ff, #dccaff)" }}
+        >
+          <MicOff className="w-10 h-10" style={{ color: "#284e72" }} />
+        </div>
+        <p
+          className="text-[18px] uppercase text-black"
+          style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+        >
+          {ko ? "로그 기능을 사용할 수 없어요" : "Logging isn't available offline"}
+        </p>
+        <p className="text-[13px] max-w-xs" style={{ color: "#5e7983" }}>
+          {ko
+            ? "미팅 기록은 인터넷 연결이 필요해요. 연결되면 다시 시도해 주세요."
+            : "Logging a meeting needs a connection. Reconnect and try again."}
+        </p>
+      </div>
+    );
   }
 
   // ── LOADING ─────────────────────────────────────────────────────────────

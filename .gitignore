@@ -18,6 +18,11 @@
 /dist/
 /tsconfig.tsbuildinfo
 
+# ---- Generated service worker (Serwist build output) ----
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js
+
 # ---- Mobile build scaffolding (regenerate via `npx cap sync`) ----
 /android/
 /ios/

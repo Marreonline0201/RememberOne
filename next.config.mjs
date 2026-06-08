@@ -1,4 +1,5 @@
-/** @type {import('next').NextConfig} */
+// ESM config (was next.config.js) — required because @serwist/next is ESM-only.
+import withSerwistInit from "@serwist/next";
 
 // Security headers applied to every response. CSP is intentionally permissive on
 // script-src (Next.js App Router ships inline bootstrap scripts) — tighten with
@@ -27,6 +28,17 @@ const securityHeaders = [
   },
 ];
 
+// Offline support: precaches the app shell + runtime-caches visited pages so the
+// app opens and shows the last-loaded data with no network. Disabled in dev.
+const withSerwist = withSerwistInit({
+  swSrc: "app/sw.ts",
+  swDest: "public/sw.js",
+  cacheOnNavigation: true,
+  reloadOnOnline: true,
+  disable: process.env.NODE_ENV === "development",
+});
+
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   // Renamed from experimental.serverComponentsExternalPackages in Next 15+.
   serverExternalPackages: ["@google/generative-ai"],
@@ -54,4 +66,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default withSerwist(nextConfig);
