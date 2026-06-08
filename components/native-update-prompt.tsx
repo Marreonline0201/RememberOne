@@ -17,7 +17,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 //   2. Wait for it to ROLL OUT on Play Store (production/your track)
 //   3. THEN bump this constant and push the JS change to Vercel
 // Keep in sync with android/app/build.gradle but only AFTER step 2.
-const MIN_BUILD = 10;
+const MIN_BUILD = 12;
 
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.rememberone.app";
@@ -102,7 +102,7 @@ export function NativeUpdatePrompt() {
               style={{ color: "#5e7983" }}
             >
               {ko
-                ? "보안 개선이 포함된 새 버전이 Play 스토어에 있어요."
+                ? "새 버전이 Play 스토어에 있어요."
                 : "A newer version is on the Play Store."}
             </p>
           </div>
