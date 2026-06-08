@@ -210,13 +210,19 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
   }, [hasCalendarConnection, hasPeople]);
 
   // Merge Google + device-calendar alerts. Dedupe so a phone that syncs the
-  // same Google event doesn't double-list it (key = title + start minute),
-  // then sort chronologically.
+  // same Google event doesn't double-list it, then sort chronologically.
+  // Key = normalized title + start INSTANT (epoch minute), not the raw ISO
+  // string: Google returns a tz offset ("...T10:30:00+09:00") while the device
+  // returns UTC ("...T01:30:00Z"), so comparing string prefixes never matched.
   const upcomingAlerts = useMemo(() => {
     const seen = new Set<string>();
     const merged: UpcomingAlertType[] = [];
     for (const a of [...googleAlerts, ...deviceAlerts]) {
-      const key = `${a.event.summary.trim().toLowerCase()}|${a.event.start.slice(0, 16)}`;
+      const startMs = new Date(a.event.start).getTime();
+      const startKey = Number.isNaN(startMs)
+        ? a.event.start
+        : Math.floor(startMs / 60000); // same minute → same event
+      const key = `${a.event.summary.trim().toLowerCase()}|${startKey}`;
       if (seen.has(key)) continue;
       seen.add(key);
       merged.push(a);
