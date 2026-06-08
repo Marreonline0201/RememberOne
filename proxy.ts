@@ -54,6 +54,7 @@ export async function proxy(request: NextRequest) {
     "/child-safety",
     "/account-deletion",
     "/.well-known",
+    "/offline", // service-worker offline fallback page (no auth/data)
   ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 

@@ -102,6 +102,9 @@ export function PersonCard({ person }: Props) {
           (LONG_PRESS_MS) opens the Share/Edit/Delete menu. */}
       <Link
         href={`/people/${person.id}`}
+        // Full prefetch (not just the loading shell) so the person's data-less
+        // route RSC is cached and opens offline; the data comes from IndexedDB.
+        prefetch
         className="block p-4 pb-16 transition-opacity active:opacity-90 select-none no-native-drag"
         // On touch, pressing-and-holding a link triggers the browser's native
         // link-drag ("drags the URL out") which also cancels our long-press

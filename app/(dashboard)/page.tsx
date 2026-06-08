@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAllPeopleFull } from "@/lib/people";
 import { PeopleGrid } from "@/components/PeopleGrid";
 import { UpcomingMeetingAlert } from "@/components/UpcomingMeetingAlert";
+import { CachePeopleSync } from "@/components/CachePeopleSync";
 import { T } from "@/components/T";
 import Link from "next/link";
 
@@ -22,6 +23,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
+      {/* Snapshot all people into IndexedDB for offline person-detail viewing */}
+      <CachePeopleSync people={people} />
+
       {/* Upcoming meeting notification */}
       {calendarConnection && people.length > 0 && (
         <UpcomingMeetingAlert />

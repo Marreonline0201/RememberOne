@@ -35,6 +35,9 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
+  // Precache the offline fallback page so the SW can serve it for any
+  // never-cached route opened with no connection.
+  additionalPrecacheEntries: [{ url: "/offline", revision: "1" }],
   disable: process.env.NODE_ENV === "development",
 });
 
