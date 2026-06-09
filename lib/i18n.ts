@@ -173,6 +173,23 @@ const keys: Translations = {
   },
   "timezone.search_placeholder": { en: "Search timezone…", ko: "시간대 검색…" },
   "timezone.none_found": { en: "No matching timezone", ko: "일치하는 시간대 없음" },
+  // Calendar setting (account page)
+  "account.calendar": { en: "Calendar", ko: "캘린더" },
+  "calendar.connected": { en: "Connected", ko: "연결됨" },
+  "calendar.not_connected": { en: "Not connected", ko: "연결 안 됨" },
+  "calendar.connect": { en: "Connect Google Calendar", ko: "Google 캘린더 연결하기" },
+  "calendar.disconnect": { en: "Disconnect", ko: "연결 해제" },
+  "calendar.disconnecting": { en: "Disconnecting…", ko: "해제 중…" },
+  "calendar.show_google_prompt": { en: "Show Google Calendar prompt", ko: "Google 캘린더 안내 표시" },
+  "calendar.show_google_prompt_hint": {
+    en: "Show the connect banner on the calendar screen.",
+    ko: "캘린더 화면에 연결 안내 배너를 표시합니다.",
+  },
+  "calendar.show_phone_prompt": { en: "Show phone calendar prompt", ko: "휴대폰 캘린더 안내 표시" },
+  "calendar.show_phone_prompt_hint": {
+    en: "Reappears on the calendar screen when your phone calendar isn't linked.",
+    ko: "휴대폰 캘린더가 연결되지 않았을 때 캘린더 화면에 다시 표시됩니다.",
+  },
   // Meet / ConversationInput page
   "meet.instruction": {
     en: "Speak \"I met Mike this morning. He has a son named Jake and he is 10 years old. He is attending Stony Brook University.\"",

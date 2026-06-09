@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { clearNativeSession } from "@/lib/native-auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search } from "lucide-react";
+import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink } from "lucide-react";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
+import { useCalendarConnect } from "@/lib/use-calendar-connect";
+import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
 import { languages, type LanguageCode } from "@/lib/i18n";
 
 // Fallback if the WebView lacks Intl.supportedValuesOf (Chrome <99).
@@ -23,9 +25,10 @@ const FALLBACK_ZONES = [
 
 interface Props {
   user: SupabaseUser;
+  hasCalendarConnection: boolean;
 }
 
-export function AccountPage({ user }: Props) {
+export function AccountPage({ user, hasCalendarConnection }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { language, setLanguage, t } = useLanguage();
@@ -36,6 +39,34 @@ export function AccountPage({ user }: Props) {
   const [savingLang, setSavingLang] = useState(false);
   const [tzOpen, setTzOpen] = useState(false);
   const [tzQuery, setTzQuery] = useState("");
+
+  // Calendar settings
+  const { connect, connecting } = useCalendarConnect();
+  const { dismissed: googleDismissed, setDismissed: setGoogleDismissed } =
+    useDismissFlag(GOOGLE_PROMPT_KEY);
+  const { dismissed: deviceDismissed, setDismissed: setDeviceDismissed } =
+    useDismissFlag(DEVICE_PROMPT_KEY);
+  const [calOpen, setCalOpen] = useState(false);
+  const [isNative, setIsNative] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  useEffect(() => {
+    import("@capacitor/core")
+      .then(({ Capacitor }) => setIsNative(Capacitor.isNativePlatform()))
+      .catch(() => {});
+  }, []);
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    try {
+      await fetch("/api/calendar/events", { method: "DELETE" });
+    } catch {
+      /* ignore — router.refresh reflects the actual state */
+    } finally {
+      setDisconnecting(false);
+      router.refresh();
+    }
+  }
 
   const allZones = useMemo<string[]>(() => {
     try {
@@ -276,6 +307,126 @@ export function AccountPage({ user }: Props) {
                 )}
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Settings — Calendar */}
+      <div
+        className="rounded-[10px_2px_10px_2px] border overflow-hidden"
+        style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}
+      >
+        <button
+          onClick={() => setCalOpen((o) => !o)}
+          className="flex items-center justify-between w-full h-11 px-4 text-sm transition-opacity active:opacity-80"
+          style={{ color: "#284e72" }}
+        >
+          <span className="flex items-center gap-3">
+            <Calendar className="w-4 h-4 shrink-0" />
+            {t("account.calendar")}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {hasCalendarConnection ? t("calendar.connected") : t("calendar.not_connected")}
+            </span>
+            {calOpen ? (
+              <ChevronUp className="w-4 h-4 shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 shrink-0" />
+            )}
+          </span>
+        </button>
+
+        {calOpen && (
+          <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: "#dccaff" }}>
+            {/* Connection status + primary action */}
+            {hasCalendarConnection ? (
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="flex items-center justify-center gap-2 w-full h-10 rounded-[8px_2px_8px_2px] text-sm font-medium border transition-opacity active:opacity-80 disabled:opacity-60"
+                style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+              >
+                {disconnecting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Unlink className="w-4 h-4" />
+                )}
+                {disconnecting ? t("calendar.disconnecting") : t("calendar.disconnect")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={connect}
+                disabled={connecting}
+                className="flex items-center justify-center gap-2 w-full h-10 rounded-[8px_2px_8px_2px] text-sm font-medium text-white transition-opacity active:opacity-80 disabled:opacity-60"
+                style={{ background: "linear-gradient(90deg, #5e7983, #9b7fda)" }}
+              >
+                {connecting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Link2 className="w-4 h-4" />
+                )}
+                {t("calendar.connect")}
+              </button>
+            )}
+
+            {/* Re-show the Google connect prompt — only relevant while not connected */}
+            {!hasCalendarConnection && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" style={{ color: "#284e72" }}>
+                    {t("calendar.show_google_prompt")}
+                  </p>
+                  <p className="text-[11px] mt-0.5" style={{ color: "#5e7983" }}>
+                    {t("calendar.show_google_prompt_hint")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!googleDismissed}
+                  aria-label={t("calendar.show_google_prompt")}
+                  onClick={() => setGoogleDismissed(!googleDismissed)}
+                  className="relative shrink-0 w-11 h-6 rounded-full transition-colors"
+                  style={{ backgroundColor: !googleDismissed ? "#284e72" : "#cdbce8" }}
+                >
+                  <span
+                    className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                    style={{ transform: !googleDismissed ? "translateX(20px)" : "translateX(0)" }}
+                  />
+                </button>
+              </div>
+            )}
+
+            {/* Re-show the phone calendar prompt — native only */}
+            {isNative && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" style={{ color: "#284e72" }}>
+                    {t("calendar.show_phone_prompt")}
+                  </p>
+                  <p className="text-[11px] mt-0.5" style={{ color: "#5e7983" }}>
+                    {t("calendar.show_phone_prompt_hint")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!deviceDismissed}
+                  aria-label={t("calendar.show_phone_prompt")}
+                  onClick={() => setDeviceDismissed(!deviceDismissed)}
+                  className="relative shrink-0 w-11 h-6 rounded-full transition-colors"
+                  style={{ backgroundColor: !deviceDismissed ? "#284e72" : "#cdbce8" }}
+                >
+                  <span
+                    className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                    style={{ transform: !deviceDismissed ? "translateX(20px)" : "translateX(0)" }}
+                  />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
