@@ -49,6 +49,12 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
   const [calOpen, setCalOpen] = useState(false);
   const [isNative, setIsNative] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  // Reflect a disconnect immediately. The connection prop is server-rendered and
+  // the service worker caches that RSC (StaleWhileRevalidate), so router.refresh()
+  // alone can keep showing "Connected" until a later load — this override flips
+  // the UI optimistically so Disconnect never looks like a no-op.
+  const [connectedOverride, setConnectedOverride] = useState<boolean | null>(null);
+  const connected = connectedOverride ?? hasCalendarConnection;
 
   useEffect(() => {
     import("@capacitor/core")
@@ -60,6 +66,7 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
     setDisconnecting(true);
     try {
       await fetch("/api/calendar/events", { method: "DELETE" });
+      setConnectedOverride(false); // flip the UI now, don't wait on the cached RSC
     } catch {
       /* ignore — router.refresh reflects the actual state */
     } finally {
@@ -327,7 +334,7 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
           </span>
           <span className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
-              {hasCalendarConnection ? t("calendar.connected") : t("calendar.not_connected")}
+              {connected ? t("calendar.connected") : t("calendar.not_connected")}
             </span>
             {calOpen ? (
               <ChevronUp className="w-4 h-4 shrink-0" />
@@ -340,7 +347,7 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
         {calOpen && (
           <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: "#dccaff" }}>
             {/* Connection status + primary action */}
-            {hasCalendarConnection ? (
+            {connected ? (
               <button
                 type="button"
                 onClick={handleDisconnect}
@@ -373,7 +380,7 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
             )}
 
             {/* Re-show the Google connect prompt — only relevant while not connected */}
-            {!hasCalendarConnection && (
+            {!connected && (
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium" style={{ color: "#284e72" }}>
