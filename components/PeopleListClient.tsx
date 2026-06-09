@@ -6,7 +6,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { PeopleGrid } from "@/components/PeopleGrid";
 import { UpcomingMeetingAlert } from "@/components/UpcomingMeetingAlert";
 import { T } from "@/components/T";
@@ -18,10 +17,14 @@ interface Props {
   hasCalendarConnection: boolean;
 }
 
+// Fixed routes (besides each person) that must open with no network. Warmed once
+// on home mount — home is the app's entry point, so this runs on every online
+// open — so account/meet/calendar are cached for offline use just like people.
+const WARM_ROUTES = ["/meet", "/account", "/calendar"];
+
 export function PeopleListClient({ initialPeople, hasCalendarConnection }: Props) {
   const [people, setPeople] = useState<PersonFull[]>(initialPeople);
-  const router = useRouter();
-  const prefetchedRef = useRef<Set<string>>(new Set());
+  const warmedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
@@ -41,21 +44,25 @@ export function PeopleListClient({ initialPeople, hasCalendarConnection }: Props
     };
   }, [initialPeople]);
 
-  // Warm the SW cache for every person's (data-less) route while online, so each
-  // one opens with no network — not just the cards Next prefetches in-viewport.
-  // Once per id; skipped offline.
+  // Warm the SW cache with every person's (and key route's) FULL payload while
+  // online, so each opens with no network — not just the cards Next prefetches in
+  // viewport. We fetch the RSC directly (RSC:1, no prefetch/segment headers) so
+  // the server returns the full render, which the service worker stores in
+  // `pages-rsc-full`. (`router.prefetch` can emit only a tiny segment-tree
+  // partial, which the SW deliberately skips, so a plain RSC fetch is the
+  // reliable way to cache the whole page.) Once per path; skipped offline.
   useEffect(() => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
-    for (const p of people) {
-      if (prefetchedRef.current.has(p.id)) continue;
-      prefetchedRef.current.add(p.id);
-      try {
-        router.prefetch(`/people/${p.id}`);
-      } catch {
-        /* prefetch is best-effort */
-      }
-    }
-  }, [people, router]);
+    const warm = (path: string) => {
+      if (warmedRef.current.has(path)) return;
+      warmedRef.current.add(path);
+      void fetch(path, { headers: { RSC: "1" } }).catch(() => {
+        /* best-effort warm; offline or transient errors are fine */
+      });
+    };
+    for (const p of people) warm(`/people/${p.id}`);
+    for (const route of WARM_ROUTES) warm(route);
+  }, [people]);
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">

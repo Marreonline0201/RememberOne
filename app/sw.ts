@@ -21,31 +21,40 @@ declare global {
 declare const self: ServiceWorkerGlobalScope;
 
 // ── App Router navigation caching ────────────────────────────────────────
-// Next.js navigation arrives as RSC requests (prefetch + click) and full
-// document loads. The default strategy (NetworkFirst) fails offline;
-// StaleWhileRevalidate serves instantly from cache (and refreshes in the
-// background when online). Prefetch and navigation RSC share ONE cache so a
-// route prefetched online (every <Link> here uses full prefetch) is served on
-// an offline tap — that's what lets person/account/meet open with no network.
+// Next.js navigation arrives as RSC requests and full document loads. The
+// default strategy (NetworkFirst) fails offline; StaleWhileRevalidate serves
+// instantly from cache (and refreshes in the background when online).
 const pageExpiration = () => [
   new ExpirationPlugin({ maxEntries: 256, maxAgeSeconds: 7 * 24 * 60 * 60 }),
 ];
 
 const navigationCaching: RuntimeCaching[] = [
-  // 1. RSC requests — BOTH prefetch (RSC=1 + Next-Router-Prefetch=1) and actual
-  //    navigation (RSC=1) into ONE cache. They MUST share: Next writes a
-  //    prefetch and reads a navigation, so caching them separately means a
-  //    prefetched page is never served for an offline tap (exactly why
-  //    person/account/meet showed the offline page). A single RSC=1 matcher
-  //    catches both. Links use full prefetch, so the cached RSC is the real
-  //    page, not a loading-shell partial.
+  // 1. App Router RSC navigation. Next sends three RSC request shapes per route:
+  //    a FULL-page prefetch (RSC=1, Next-Router-Prefetch=1), a real NAVIGATION
+  //    (RSC=1, no prefetch), and a tiny SEGMENT-tree prefetch
+  //    (Next-Router-Segment-Prefetch present, ~300B — NOT the full page). We
+  //    cache only the full ones (segment prefetches are excluded by the matcher)
+  //    in ONE cache, so a route warmed online is served on an offline tap —
+  //    that's what lets person/account/meet open with no network.
+  //
+  //    matchOptions ignoreSearch+ignoreVary are REQUIRED, not cosmetic: a real
+  //    navigation's URL carries a different `_rsc` token and its router headers
+  //    differ from the cached prefetch, and RSC responses `Vary` on those headers
+  //    (rsc, next-router-state-tree, next-router-prefetch, …) — so an exact match
+  //    MISSES offline (verified at the Cache API layer: only ignoreSearch+
+  //    ignoreVary hits). Ignoring both serves the path's cached full render for
+  //    any RSC request to it. Safe ONLY because segment-tree partials never enter
+  //    this cache — otherwise ignoreVary could hand back a ~300B loading shell
+  //    that never resolves offline.
   {
     matcher: ({ request, url: { pathname }, sameOrigin }) =>
       sameOrigin &&
       !pathname.startsWith("/api/") &&
-      request.headers.get("RSC") === "1",
+      request.headers.get("RSC") === "1" &&
+      !request.headers.has("Next-Router-Segment-Prefetch"),
     handler: new StaleWhileRevalidate({
-      cacheName: "pages-rsc",
+      cacheName: "pages-rsc-full",
+      matchOptions: { ignoreSearch: true, ignoreVary: true },
       plugins: pageExpiration(),
     }),
   },
@@ -83,6 +92,14 @@ const serwist = new Serwist({
       },
     ],
   },
+});
+
+// Drop the legacy navigation cache from earlier SW versions. The current SW
+// stores only full RSC renders in `pages-rsc-full`; the old `pages-rsc` could
+// hold partial/segment entries (or stale variants), so clear it once on update
+// to guarantee an offline navigation never gets served a loading-shell partial.
+self.addEventListener("activate", (event) => {
+  event.waitUntil(caches.delete("pages-rsc").catch(() => false));
 });
 
 serwist.addEventListeners();
