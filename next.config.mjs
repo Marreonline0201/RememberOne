@@ -43,6 +43,12 @@ const withSerwist = withSerwistInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // `next dev` runs on Turbopack; only `next build --webpack` uses webpack (where
+  // Serwist generates the service worker — Serwist is disabled in dev). The
+  // @serwist/next wrapper still attaches a webpack config, which makes Turbopack
+  // error with "webpack config and no turbopack config". An explicit empty
+  // turbopack config silences that and lets `npm run dev` run, as Next recommends.
+  turbopack: {},
   // Renamed from experimental.serverComponentsExternalPackages in Next 15+.
   serverExternalPackages: ["@google/generative-ai"],
   images: {
