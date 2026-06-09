@@ -4,8 +4,9 @@
 // reflects queued edits/deletes instantly. Seeded by the server snapshot
 // (initialPeople) on each online load.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PeopleGrid } from "@/components/PeopleGrid";
 import { UpcomingMeetingAlert } from "@/components/UpcomingMeetingAlert";
 import { T } from "@/components/T";
@@ -19,6 +20,8 @@ interface Props {
 
 export function PeopleListClient({ initialPeople, hasCalendarConnection }: Props) {
   const [people, setPeople] = useState<PersonFull[]>(initialPeople);
+  const router = useRouter();
+  const prefetchedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
@@ -37,6 +40,22 @@ export function PeopleListClient({ initialPeople, hasCalendarConnection }: Props
       unsub();
     };
   }, [initialPeople]);
+
+  // Warm the SW cache for every person's (data-less) route while online, so each
+  // one opens with no network — not just the cards Next prefetches in-viewport.
+  // Once per id; skipped offline.
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    for (const p of people) {
+      if (prefetchedRef.current.has(p.id)) continue;
+      prefetchedRef.current.add(p.id);
+      try {
+        router.prefetch(`/people/${p.id}`);
+      } catch {
+        /* prefetch is best-effort */
+      }
+    }
+  }, [people, router]);
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">

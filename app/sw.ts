@@ -21,30 +21,24 @@ declare global {
 declare const self: ServiceWorkerGlobalScope;
 
 // ── App Router navigation caching ────────────────────────────────────────
-// Next.js navigation arrives as three distinct request types. The default
-// strategy (NetworkFirst) fails offline; StaleWhileRevalidate serves instantly
-// from cache (and refreshes in the background when online). Because Next
-// prefetches every <Link> in the viewport, caching RSC-PREFETCH requests means
-// person pages get cached just by scrolling the people list — so you can open
-// and navigate them offline without having visited each one first.
+// Next.js navigation arrives as RSC requests (prefetch + click) and full
+// document loads. The default strategy (NetworkFirst) fails offline;
+// StaleWhileRevalidate serves instantly from cache (and refreshes in the
+// background when online). Prefetch and navigation RSC share ONE cache so a
+// route prefetched online (every <Link> here uses full prefetch) is served on
+// an offline tap — that's what lets person/account/meet open with no network.
 const pageExpiration = () => [
   new ExpirationPlugin({ maxEntries: 256, maxAgeSeconds: 7 * 24 * 60 * 60 }),
 ];
 
 const navigationCaching: RuntimeCaching[] = [
-  // 1. RSC prefetch (hovering / link in viewport): RSC=1 + Next-Router-Prefetch=1
-  {
-    matcher: ({ request, url: { pathname }, sameOrigin }) =>
-      sameOrigin &&
-      !pathname.startsWith("/api/") &&
-      request.headers.get("RSC") === "1" &&
-      request.headers.get("Next-Router-Prefetch") === "1",
-    handler: new StaleWhileRevalidate({
-      cacheName: "pages-rsc-prefetch",
-      plugins: pageExpiration(),
-    }),
-  },
-  // 2. RSC navigation (actual click): RSC=1
+  // 1. RSC requests — BOTH prefetch (RSC=1 + Next-Router-Prefetch=1) and actual
+  //    navigation (RSC=1) into ONE cache. They MUST share: Next writes a
+  //    prefetch and reads a navigation, so caching them separately means a
+  //    prefetched page is never served for an offline tap (exactly why
+  //    person/account/meet showed the offline page). A single RSC=1 matcher
+  //    catches both. Links use full prefetch, so the cached RSC is the real
+  //    page, not a loading-shell partial.
   {
     matcher: ({ request, url: { pathname }, sameOrigin }) =>
       sameOrigin &&
@@ -55,7 +49,7 @@ const navigationCaching: RuntimeCaching[] = [
       plugins: pageExpiration(),
     }),
   },
-  // 3. Full-page document navigation (first load / hard refresh / cold launch)
+  // 2. Full-page document navigation (first load / hard refresh / cold launch)
   {
     matcher: ({ request, url: { pathname }, sameOrigin }) =>
       sameOrigin &&

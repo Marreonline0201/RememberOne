@@ -62,6 +62,7 @@ export function DashboardNav({ user }: Props) {
             <Link
               key={href}
               href={href}
+              prefetch
               className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
                 pathname === href
                   ? "bg-accent text-accent-foreground font-medium"
@@ -76,7 +77,7 @@ export function DashboardNav({ user }: Props) {
         <div className="flex-1" />
 
         {/* Avatar → account page */}
-        <Link href="/account" aria-label="Account">
+        <Link href="/account" prefetch aria-label="Account">
           {avatarFallback}
         </Link>
       </div>
@@ -98,7 +99,7 @@ export function DashboardNav({ user }: Props) {
         </span>
 
         {/* Avatar → account page */}
-        <Link href="/account" className="absolute right-4" aria-label="Account">
+        <Link href="/account" prefetch className="absolute right-4" aria-label="Account">
           {avatarFallback}
         </Link>
       </div>
@@ -115,6 +116,7 @@ export function DashboardNav({ user }: Props) {
         {/* People tab */}
         <Link
           href="/"
+          prefetch
           className="flex items-center justify-center flex-1"
           aria-label="People"
         >
@@ -126,6 +128,7 @@ export function DashboardNav({ user }: Props) {
         {/* Log meeting — gradient-ring mic button */}
         <Link
           href="/meet"
+          prefetch
           className="flex items-center justify-center flex-1"
           aria-label="Log a meeting"
         >
@@ -145,6 +148,7 @@ export function DashboardNav({ user }: Props) {
         {/* Calendar tab */}
         <Link
           href="/calendar"
+          prefetch
           className="flex items-center justify-center flex-1"
           aria-label="Calendar"
         >

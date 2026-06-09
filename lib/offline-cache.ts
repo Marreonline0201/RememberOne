@@ -111,18 +111,41 @@ export async function outboxCount(): Promise<number> {
   }
 }
 
+// Person IDs that have queued (un-synced) writes, derived from outbox URLs
+// (/api/people/{id}…). A server snapshot must never overwrite these, or we'd
+// lose an optimistic local edit before it replays.
+export async function pendingPersonIds(): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (const item of await getOutbox()) {
+    const path = item.url.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
+    const m = path.match(/^\/api\/people\/([^/]+)/);
+    if (m) ids.add(m[1]);
+  }
+  return ids;
+}
+
 // ── People ───────────────────────────────────────────────────────────────
-// Full snapshot from the server (home load). Skipped while writes are pending
-// so a server snapshot can't clobber un-synced optimistic edits.
+// Full snapshot from the server (home load). So opening the app online saves
+// EVERY person for offline use. People with un-synced edits are preserved (we
+// never overwrite their optimistic state with the older server copy).
 export async function cachePeople(people: PersonFull[]): Promise<void> {
   const dbp = getDB();
   if (!dbp) return;
   try {
-    if ((await outboxCount()) > 0) return; // local edits are ahead of the server
     const db = await dbp;
+    const pending = await pendingPersonIds();
     const tx = db.transaction(PEOPLE, "readwrite");
-    await tx.store.clear();
-    for (const p of people) await tx.store.put(p);
+    if (pending.size === 0) {
+      // Clean state: replace the whole snapshot (also drops server-deleted people).
+      await tx.store.clear();
+      for (const p of people) await tx.store.put(p);
+    } else {
+      // Edits pending: merge — refresh/insert every person that isn't mid-edit,
+      // and leave the pending ones (and people absent from this snapshot) as-is.
+      for (const p of people) {
+        if (!pending.has(p.id)) await tx.store.put(p);
+      }
+    }
     await tx.done;
     notifyOfflineChange();
   } catch (e) {
