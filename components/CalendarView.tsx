@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { formatDate, formatRelativeDate, localizeKey, formatTimeInZone, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -12,6 +13,7 @@ import { getLanguage } from "@/lib/i18n";
 import { RecapLine } from "@/components/RecapLine";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import { useDeviceCalendar } from "@/lib/use-device-calendar";
+import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
 import type { PersonFull, UpcomingMeetingAlert as UpcomingAlertType } from "@/types/app";
 
 interface CalendarEntry {
@@ -42,19 +44,27 @@ function toDateKey(year: number, month: number, day: number): string {
 }
 
 // ── Connect Calendar Banner ─────────────────────────────────
-function ConnectCalendarBannerInner({ ko }: { ko: boolean }) {
+function ConnectCalendarBannerInner({ ko, onDismiss }: { ko: boolean; onDismiss: () => void }) {
   const searchParams = useSearchParams();
   const error = searchParams.get("calendar_error");
   const { connect, connecting } = useCalendarConnect();
 
   return (
     <div
-      className="p-4 flex flex-col gap-3"
+      className="relative p-4 flex flex-col gap-3"
       style={{
         borderRadius: "10px 2px 10px 2px",
         background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
       }}
     >
+      <button
+        onClick={onDismiss}
+        aria-label={ko ? "닫기" : "Dismiss"}
+        className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full text-black/50 hover:text-black hover:bg-white/40 transition-colors"
+      >
+        <X className="w-4 h-4" />
+      </button>
+
       <div className="flex items-start gap-3">
         {/* Calendar icon */}
         <div
@@ -64,7 +74,7 @@ function ConnectCalendarBannerInner({ ko }: { ko: boolean }) {
           📅
         </div>
 
-        <div className="flex-1">
+        <div className="flex-1 pr-6">
           <p
             className="text-[15px] text-black leading-tight"
             style={{ fontFamily: "'Hammersmith One', sans-serif" }}
@@ -98,10 +108,10 @@ function ConnectCalendarBannerInner({ ko }: { ko: boolean }) {
   );
 }
 
-function ConnectCalendarBanner({ ko }: { ko: boolean }) {
+function ConnectCalendarBanner({ ko, onDismiss }: { ko: boolean; onDismiss: () => void }) {
   return (
     <Suspense fallback={null}>
-      <ConnectCalendarBannerInner ko={ko} />
+      <ConnectCalendarBannerInner ko={ko} onDismiss={onDismiss} />
     </Suspense>
   );
 }
@@ -110,20 +120,30 @@ function ConnectCalendarBanner({ ko }: { ko: boolean }) {
 function DeviceCalendarPrompt({
   ko,
   onConnect,
+  onDismiss,
   busy,
 }: {
   ko: boolean;
   onConnect: () => void;
+  onDismiss: () => void;
   busy: boolean;
 }) {
   return (
     <div
-      className="p-4 flex flex-col gap-3"
+      className="relative p-4 flex flex-col gap-3"
       style={{
         borderRadius: "10px 2px 10px 2px",
         background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
       }}
     >
+      <button
+        onClick={onDismiss}
+        aria-label={ko ? "닫기" : "Dismiss"}
+        className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full text-black/50 hover:text-black hover:bg-white/40 transition-colors"
+      >
+        <X className="w-4 h-4" />
+      </button>
+
       <div className="flex items-start gap-3">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-lg"
@@ -131,7 +151,7 @@ function DeviceCalendarPrompt({
         >
           📱
         </div>
-        <div className="flex-1">
+        <div className="flex-1 pr-6">
           <p
             className="text-[15px] text-black leading-tight"
             style={{ fontFamily: "'Hammersmith One', sans-serif" }}
@@ -170,6 +190,16 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
   const { timezone } = useTimezone();
   const locale = getLanguage(language).locale;
   const ko = language === "ko";
+
+  // Per-device "dismissed" flags for the two connect prompts (localStorage).
+  // `hydrated` gates rendering so an already-dismissed banner never flashes.
+  const {
+    dismissed: googleDismissed,
+    setDismissed: dismissGoogle,
+    hydrated,
+  } = useDismissFlag(GOOGLE_PROMPT_KEY);
+  const { dismissed: deviceDismissed, setDismissed: dismissDevice } =
+    useDismissFlag(DEVICE_PROMPT_KEY);
 
   const today = new Date();
   // "Today" highlight uses the user's chosen timezone, not the device/server zone.
@@ -403,13 +433,18 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
       </div>
 
       {/* ── Google Calendar connect prompt ── */}
-      {!hasCalendarConnection && (
-        <ConnectCalendarBanner ko={ko} />
+      {hydrated && !hasCalendarConnection && !googleDismissed && (
+        <ConnectCalendarBanner ko={ko} onDismiss={() => dismissGoogle(true)} />
       )}
 
       {/* ── Phone calendar prompt (native only, when not yet granted) ── */}
-      {hasPeople && deviceStatus === "prompt" && (
-        <DeviceCalendarPrompt ko={ko} onConnect={connectDevice} busy={false} />
+      {hydrated && hasPeople && deviceStatus === "prompt" && !deviceDismissed && (
+        <DeviceCalendarPrompt
+          ko={ko}
+          onConnect={connectDevice}
+          onDismiss={() => dismissDevice(true)}
+          busy={false}
+        />
       )}
       {hasPeople && deviceStatus === "denied" && (
         <p className="text-[11px] px-1" style={{ color: "#5e7983" }}>

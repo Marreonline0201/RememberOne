@@ -9,5 +9,11 @@ export default async function Account() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  return <AccountPage user={user} />;
+  const { data: calendarConnection } = await supabase
+    .from("calendar_connections")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return <AccountPage user={user} hasCalendarConnection={!!calendarConnection} />;
 }
