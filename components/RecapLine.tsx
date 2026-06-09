@@ -77,6 +77,10 @@ export function RecapLine({ summary, className, style }: Props) {
     // Show the original while we fetch — better than a blank line.
     setDisplayed(summary);
 
+    // Offline: translation needs the network — keep the original verbatim and
+    // skip the doomed request.
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
     (async () => {
       try {
         const res = await fetch("/api/ai/translate-summary", {

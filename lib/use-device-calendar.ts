@@ -11,9 +11,11 @@
 //
 // Flow: requestReadOnlyCalendarAccess (Android) / requestFullCalendarAccess
 // (iOS — no read-only tier on iOS 17) → listEventsInRange (next 7 days) →
-// POST /api/calendar/device-events (server matches to people) → alerts.
+// match to cached people on-device (offline-safe, no server round-trip) → alerts.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getCachedPeople } from "@/lib/offline-cache";
+import { matchEventsToPeopleClient } from "@/lib/calendar-match-client";
 import type { CalendarEvent, UpcomingMeetingAlert } from "@/types/app";
 
 const DAYS_AHEAD = 7; // mirror the Google window (lib/google-calendar.ts)
@@ -78,15 +80,10 @@ export function useDeviceCalendar(enabled: boolean = true) {
         return;
       }
 
-      const res = await fetch("/api/calendar/device-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ events }),
-      });
-      if (res.ok) {
-        const { data } = await res.json();
-        if (Array.isArray(data)) setAlerts(data);
-      }
+      // Match on-device against the cached people — works fully offline, no
+      // server round-trip (mirrors the server matcher via eventMentionsPerson).
+      const people = await getCachedPeople();
+      setAlerts(matchEventsToPeopleClient(events, people));
       setStatus("granted");
     } catch (err) {
       // Permission was granted; reading/matching just failed. Don't nag the

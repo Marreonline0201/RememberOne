@@ -37,7 +37,15 @@ export function LanguageProvider({
   async function setLanguage(lang: LanguageCode) {
     setLang(lang);
     setShowPicker(false);
-    await supabase.auth.updateUser({ data: { language: lang } });
+    // Persist to the server only when online — offline this would hang/reject and
+    // nothing queues it. The choice still applies locally for this session.
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      try {
+        await supabase.auth.updateUser({ data: { language: lang } });
+      } catch {
+        /* transient — local state already updated */
+      }
+    }
   }
 
   return (

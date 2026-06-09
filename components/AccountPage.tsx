@@ -6,13 +6,19 @@ import { createClient } from "@/lib/supabase/client";
 import { clearNativeSession } from "@/lib/native-auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink } from "lucide-react";
+import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
+import { useOnline } from "@/lib/use-online";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
+import {
+  getCachedProfile,
+  getCachedConnectionFlag,
+  subscribeOffline,
+  type CachedProfile,
+} from "@/lib/offline-cache";
 import { languages, type LanguageCode } from "@/lib/i18n";
 
 // Fallback if the WebView lacks Intl.supportedValuesOf (Chrome <99).
@@ -23,14 +29,10 @@ const FALLBACK_ZONES = [
   "Australia/Sydney",
 ];
 
-interface Props {
-  user: SupabaseUser;
-  hasCalendarConnection: boolean;
-}
-
-export function AccountPage({ user, hasCalendarConnection }: Props) {
+export function AccountPage() {
   const router = useRouter();
   const supabase = createClient();
+  const online = useOnline();
   const { language, setLanguage, t } = useLanguage();
   const { timezone, mode: tzMode, value: tzValue, setMode: setTzMode, setTimezone } = useTimezone();
   const [signingOut, setSigningOut] = useState(false);
@@ -54,7 +56,22 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
   // alone can keep showing "Connected" until a later load — this override flips
   // the UI optimistically so Disconnect never looks like a no-op.
   const [connectedOverride, setConnectedOverride] = useState<boolean | null>(null);
-  const connected = connectedOverride ?? hasCalendarConnection;
+
+  // Profile + calendar-connection flag are read from the local store so the page
+  // renders offline (seeded by the online home load). subscribeOffline keeps them
+  // fresh after a sync.
+  const [profile, setProfile] = useState<CachedProfile | null>(null);
+  const [cachedConnection, setCachedConnection] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setProfile(await getCachedProfile());
+      setCachedConnection((await getCachedConnectionFlag()) ?? false);
+    };
+    void load();
+    return subscribeOffline(load);
+  }, []);
+
+  const connected = connectedOverride ?? cachedConnection;
 
   useEffect(() => {
     import("@capacitor/core")
@@ -101,8 +118,8 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
     setLangOpen(false);
   }
 
-  const displayName =
-    (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "User";
+  const ko = language === "ko";
+  const displayName = profile?.full_name ?? profile?.email ?? "User";
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -137,7 +154,7 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
               {displayName}
             </p>
             <p className="text-[13px] mt-0.5 truncate" style={{ color: "#5e7983" }}>
-              {user.email}
+              {profile?.email}
             </p>
           </div>
         </div>
@@ -346,12 +363,18 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
 
         {calOpen && (
           <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: "#dccaff" }}>
+            {!online && (
+              <p className="flex items-center gap-2 text-[12px]" style={{ color: "#5e7983" }}>
+                <WifiOff className="w-3.5 h-3.5 shrink-0" />
+                {ko ? "캘린더 연결은 인터넷이 필요해요" : "Calendar changes need a connection"}
+              </p>
+            )}
             {/* Connection status + primary action */}
             {connected ? (
               <button
                 type="button"
                 onClick={handleDisconnect}
-                disabled={disconnecting}
+                disabled={disconnecting || !online}
                 className="flex items-center justify-center gap-2 w-full h-10 rounded-[8px_2px_8px_2px] text-sm font-medium border transition-opacity active:opacity-80 disabled:opacity-60"
                 style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
               >
@@ -366,7 +389,7 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
               <button
                 type="button"
                 onClick={connect}
-                disabled={connecting}
+                disabled={connecting || !online}
                 className="flex items-center justify-center gap-2 w-full h-10 rounded-[8px_2px_8px_2px] text-sm font-medium text-white transition-opacity active:opacity-80 disabled:opacity-60"
                 style={{ background: "linear-gradient(90deg, #5e7983, #9b7fda)" }}
               >
@@ -451,7 +474,7 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
         </p>
         <button
           onClick={handleSignOut}
-          disabled={signingOut}
+          disabled={signingOut || !online}
           className="flex items-center gap-3 w-full h-11 px-4 rounded-[8px_2px_8px_2px] text-sm font-medium text-white transition-opacity active:opacity-80 disabled:opacity-60"
           style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
         >
@@ -462,6 +485,12 @@ export function AccountPage({ user, hasCalendarConnection }: Props) {
           )}
           {signingOut ? t("account.signing_out") : t("account.sign_out")}
         </button>
+        {!online && (
+          <p className="flex items-center gap-2 text-[12px] mt-2" style={{ color: "#5e7983" }}>
+            <WifiOff className="w-3.5 h-3.5 shrink-0" />
+            {ko ? "오프라인에서는 로그아웃할 수 없어요" : "Signing out needs a connection"}
+          </p>
+        )}
       </div>
 
       {/* Account deletion */}

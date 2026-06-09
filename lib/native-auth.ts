@@ -55,15 +55,24 @@ export async function restoreNativeSession(
   const { value: refreshToken } = await Preferences.get({ key: REFRESH_TOKEN_KEY });
   if (!refreshToken) return false;
 
+  // Can't refresh with no network — keep the token so the session restores on a
+  // later online launch (offline reads work from the local cache regardless).
+  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+
   const { data, error } = await supabase.auth.refreshSession({
     refresh_token: refreshToken,
   });
 
-  if (error || !data.session) {
-    // Refresh token was revoked or expired — drop it so we don't loop.
-    await Preferences.remove({ key: REFRESH_TOKEN_KEY });
+  if (error) {
+    // Drop the token ONLY on a genuine revocation/expiry (4xx), not on a network
+    // blip — a transient failure shouldn't force a re-login once back online.
+    const status = (error as { status?: number }).status;
+    if (status === 400 || status === 401 || status === 403) {
+      await Preferences.remove({ key: REFRESH_TOKEN_KEY });
+    }
     return false;
   }
+  if (!data.session) return false;
 
   // Persist the rotated refresh token so the next launch also works.
   await Preferences.set({

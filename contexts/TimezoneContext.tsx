@@ -71,6 +71,17 @@ export function TimezoneProvider({
       ? value ?? autoTimezone ?? FALLBACK_TZ
       : autoTimezone ?? value ?? FALLBACK_TZ;
 
+  // Persist to the server only when online — offline updateUser would hang/reject
+  // and nothing queues it; the choice still applies locally for this session.
+  async function persistTz(data: { tz_mode: string; tz_value: string | null }) {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    try {
+      await supabase.auth.updateUser({ data });
+    } catch {
+      /* transient — local state already updated */
+    }
+  }
+
   async function setMode(next: TimezoneMode) {
     setModeState(next);
     // When switching to manual without a prior choice, seed with the current
@@ -80,17 +91,13 @@ export function TimezoneProvider({
       nextValue = autoTimezone ?? FALLBACK_TZ;
       setValueState(nextValue);
     }
-    await supabase.auth.updateUser({
-      data: { tz_mode: next, tz_value: nextValue },
-    });
+    await persistTz({ tz_mode: next, tz_value: nextValue });
   }
 
   async function setTimezone(tz: string) {
     setValueState(tz);
     setModeState("manual");
-    await supabase.auth.updateUser({
-      data: { tz_mode: "manual", tz_value: tz },
-    });
+    await persistTz({ tz_mode: "manual", tz_value: tz });
   }
 
   return (

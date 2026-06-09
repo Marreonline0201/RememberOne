@@ -1,42 +1,22 @@
-// Mic / Log a Meeting page — matches the Figma mic page design.
-// When ?personId=... is in the URL, goes directly into "add details for this person" mode.
+// Mic / Log a Meeting page — a thin wrapper so it renders fully client-side and
+// opens offline (the cached shell is data-free). ?personId=... is read on the
+// client (MeetClient) and the name is resolved from the local store; the AI
+// logging flow itself stays online-only (guarded inside ConversationInput).
 
 import { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
-import { ConversationInput } from "@/components/ConversationInput";
+import { Suspense } from "react";
+import { MeetClient } from "@/components/MeetClient";
 
 export const metadata: Metadata = {
   title: "Log a Meeting — RememberOne",
 };
 
-interface Props {
-  searchParams: Promise<{ personId?: string }>;
-}
-
-export default async function MeetPage(props: Props) {
-  const searchParams = await props.searchParams;
-  let targetPersonId: string | undefined;
-  let targetPersonName: string | undefined;
-
-  if (searchParams.personId) {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("people")
-      .select("id, name")
-      .eq("id", searchParams.personId)
-      .single();
-    if (data) {
-      targetPersonId = data.id;
-      targetPersonName = data.name;
-    }
-  }
-
+export default function MeetPage() {
   return (
     <div className="w-full max-w-lg mx-auto">
-      <ConversationInput
-        personId={targetPersonId}
-        personName={targetPersonName}
-      />
+      <Suspense>
+        <MeetClient />
+      </Suspense>
     </div>
   );
 }

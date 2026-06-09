@@ -9,12 +9,20 @@ import Link from "next/link";
 import { PeopleGrid } from "@/components/PeopleGrid";
 import { UpcomingMeetingAlert } from "@/components/UpcomingMeetingAlert";
 import { T } from "@/components/T";
-import { cachePeople, getCachedPeople, subscribeOffline } from "@/lib/offline-cache";
+import {
+  cachePeople,
+  cacheConnectionFlag,
+  cacheProfile,
+  getCachedPeople,
+  subscribeOffline,
+  type CachedProfile,
+} from "@/lib/offline-cache";
 import type { PersonFull } from "@/types/app";
 
 interface Props {
   initialPeople: PersonFull[];
   hasCalendarConnection: boolean;
+  initialProfile: CachedProfile;
 }
 
 // Fixed routes (besides each person) that must open with no network. Warmed once
@@ -22,9 +30,21 @@ interface Props {
 // open — so account/meet/calendar are cached for offline use just like people.
 const WARM_ROUTES = ["/meet", "/account", "/calendar"];
 
-export function PeopleListClient({ initialPeople, hasCalendarConnection }: Props) {
+export function PeopleListClient({
+  initialPeople,
+  hasCalendarConnection,
+  initialProfile,
+}: Props) {
   const [people, setPeople] = useState<PersonFull[]>(initialPeople);
   const warmedRef = useRef<Set<string>>(new Set());
+
+  // Snapshot the connection flag + user profile so the calendar and account
+  // pages render offline without a server fetch. This online home load is the
+  // single writer for both.
+  useEffect(() => {
+    void cacheConnectionFlag(hasCalendarConnection);
+    void cacheProfile(initialProfile);
+  }, [hasCalendarConnection, initialProfile]);
 
   useEffect(() => {
     let active = true;

@@ -9,12 +9,13 @@
 // whenever the local data changes (optimistic edits, sync, refresh).
 
 import { openDB, type IDBPDatabase } from "idb";
-import type { PersonFull } from "@/types/app";
+import type { CalendarEvent, PersonFull } from "@/types/app";
 
 const DB_NAME = "rememberone-offline";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const PEOPLE = "people";
 const OUTBOX = "outbox";
+const META = "meta";
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -28,6 +29,10 @@ function getDB(): Promise<IDBPDatabase> | null {
         }
         if (!db.objectStoreNames.contains(OUTBOX)) {
           db.createObjectStore(OUTBOX, { keyPath: "seq", autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains(META)) {
+          // Singletons keyed by a fixed name: "profile", "connectionFlag", "calendar".
+          db.createObjectStore(META);
         }
       },
     });
@@ -198,3 +203,57 @@ export async function removeCachedPerson(id: string): Promise<void> {
     console.warn("[offline] removeCachedPerson failed:", e);
   }
 }
+
+// ── Meta (singletons: user profile, calendar-connection flag, cached calendar) ─
+// Small key→value records that let the dashboard pages (account, calendar)
+// render offline without a server fetch. Stored in the META store, keyed by a
+// fixed name. Written on the online home load (the single entry point).
+
+export interface CachedProfile {
+  email: string | null;
+  full_name: string | null;
+  language: string | null;
+  tz_mode: string | null;
+  tz_value: string | null;
+}
+
+// Last-synced calendar, stored NORMALIZED: only matched person IDs (not full
+// person blobs), re-hydrated against the people store at render time — so the
+// cache stays tiny and always reflects current/edited/deleted people.
+export interface CachedCalendar {
+  events: { event: CalendarEvent; matchedPersonIds: string[] }[];
+  syncedAt: number; // epoch ms — drives the "last updated" note
+}
+
+async function getMeta<T>(key: string): Promise<T | null> {
+  const dbp = getDB();
+  if (!dbp) return null;
+  try {
+    const db = await dbp;
+    return ((await db.get(META, key)) as T | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function setMeta(key: string, value: unknown): Promise<void> {
+  const dbp = getDB();
+  if (!dbp) return;
+  try {
+    const db = await dbp;
+    await db.put(META, value, key); // out-of-line key (store has no keyPath)
+    notifyOfflineChange();
+  } catch (e) {
+    console.warn(`[offline] setMeta(${key}) failed:`, e);
+  }
+}
+
+export const getCachedProfile = () => getMeta<CachedProfile>("profile");
+export const cacheProfile = (p: CachedProfile) => setMeta("profile", p);
+
+export const getCachedConnectionFlag = () => getMeta<boolean>("connectionFlag");
+export const cacheConnectionFlag = (connected: boolean) =>
+  setMeta("connectionFlag", connected);
+
+export const getCachedCalendarEvents = () => getMeta<CachedCalendar>("calendar");
+export const cacheCalendarEvents = (c: CachedCalendar) => setMeta("calendar", c);

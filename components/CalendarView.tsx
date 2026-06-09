@@ -5,33 +5,26 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { X, WifiOff } from "lucide-react";
 import { formatDate, formatRelativeDate, localizeKey, formatTimeInZone, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
+import { useOnline } from "@/lib/use-online";
 import { getLanguage } from "@/lib/i18n";
 import { RecapLine } from "@/components/RecapLine";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import { useDeviceCalendar } from "@/lib/use-device-calendar";
 import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
+import { groupMeetingsByDate } from "@/lib/calendar-group";
+import {
+  getCachedPeople,
+  getCachedConnectionFlag,
+  getCachedCalendarEvents,
+  cacheCalendarEvents,
+  subscribeOffline,
+  type CachedCalendar,
+} from "@/lib/offline-cache";
 import type { PersonFull, UpcomingMeetingAlert as UpcomingAlertType } from "@/types/app";
-
-interface CalendarEntry {
-  person: PersonFull;
-  meetingId: string;
-  summary?: string | null;
-}
-
-interface DayGroup {
-  dateKey: string; // "2024-03-15"
-  entries: CalendarEntry[];
-}
-
-interface Props {
-  groups: DayGroup[];
-  hasCalendarConnection: boolean;
-  hasPeople: boolean;
-}
 
 const INTEREST_KEYS = ["interest", "hobby", "hobbies", "sport", "sports", "passion", "likes"];
 function isInterest(key: string) {
@@ -185,11 +178,29 @@ function DeviceCalendarPrompt({
 }
 
 // ── CalendarView ─────────────────────────────────────────────
-export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props) {
+export function CalendarView() {
   const { language } = useLanguage();
   const { timezone } = useTimezone();
   const locale = getLanguage(language).locale;
   const ko = language === "ko";
+  const online = useOnline();
+
+  // Self-load people + calendar-connection flag from the local store so the
+  // calendar renders offline (seeded by the online home load). subscribeOffline
+  // keeps them fresh after edits/sync.
+  const [people, setPeople] = useState<PersonFull[]>([]);
+  const [hasCalendarConnection, setHasCalendarConnection] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setPeople(await getCachedPeople());
+      setHasCalendarConnection((await getCachedConnectionFlag()) ?? false);
+    };
+    void load();
+    return subscribeOffline(load);
+  }, []);
+
+  const hasPeople = people.length > 0;
+  const groups = useMemo(() => groupMeetingsByDate(people), [people]);
 
   // Per-device "dismissed" flags for the two connect prompts (localStorage).
   // `hydrated` gates rendering so an already-dismissed banner never flashes.
@@ -209,16 +220,70 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
     () => new Date(today.getFullYear(), today.getMonth(), 1)
   );
   const [selectedDate, setSelectedDate] = useState<string | null>(todayKey);
-  const [googleAlerts, setGoogleAlerts] = useState<UpcomingAlertType[]>([]);
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
 
-  // Device (phone) calendar — native only. Matches on-device events to people,
-  // independent of the Google connection. Enabled only when there are people.
+  // Device (phone) calendar — native only. Reads on-device events and matches
+  // them to people FULLY ON-DEVICE (offline-safe), independent of Google.
   const {
     alerts: deviceAlerts,
     status: deviceStatus,
     connect: connectDevice,
   } = useDeviceCalendar(hasPeople);
+
+  // Cached Google calendar, stored NORMALIZED (matched person IDs) and hydrated
+  // against the current people store at render time — so it shows offline (the
+  // last sync) and auto-reflects edited/deleted people.
+  const [cachedCalendar, setCachedCalendar] = useState<CachedCalendar | null>(null);
+  useEffect(() => {
+    let active = true;
+    void getCachedCalendarEvents().then((c) => {
+      if (active) setCachedCalendar(c);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // When online + connected, refresh from Google, then re-cache normalized.
+  useEffect(() => {
+    if (!online || !hasCalendarConnection || !hasPeople) return;
+    let active = true;
+    fetch("/api/calendar/events")
+      .then((r) => r.json())
+      .then(({ data }) => {
+        if (!active || !Array.isArray(data)) return;
+        const alerts = data as UpcomingAlertType[];
+        const normalized: CachedCalendar = {
+          events: alerts.map((a) => ({
+            event: a.event,
+            matchedPersonIds: a.matchedPeople.map((p) => p.id),
+          })),
+          syncedAt: Date.now(),
+        };
+        setCachedCalendar(normalized);
+        void cacheCalendarEvents(normalized);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [online, hasCalendarConnection, hasPeople]);
+
+  // Hydrate the cached normalized events into full alerts using current people.
+  const googleAlerts = useMemo<UpcomingAlertType[]>(() => {
+    if (!cachedCalendar) return [];
+    const byId = new Map(people.map((p) => [p.id, p]));
+    return cachedCalendar.events
+      .map(({ event, matchedPersonIds }) => ({
+        event,
+        matchedPeople: matchedPersonIds
+          .map((id) => byId.get(id))
+          .filter((p): p is PersonFull => !!p),
+      }))
+      .filter((a) => a.matchedPeople.length > 0);
+  }, [cachedCalendar, people]);
+
+  const calendarSyncedAt = cachedCalendar?.syncedAt ?? null;
 
   // autoTimezone is null on first render, so todayKey starts as the UTC day and
   // the initial selectedDate freezes on it. Once the real zone resolves (or the
@@ -229,15 +294,6 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
     setSelectedDate((cur) => (cur === lastAutoTodayRef.current ? todayKey : cur));
     lastAutoTodayRef.current = todayKey;
   }, [todayKey]);
-
-  // Fetch upcoming Google Calendar events for dot markers
-  useEffect(() => {
-    if (!hasCalendarConnection || !hasPeople) return;
-    fetch("/api/calendar/events")
-      .then((r) => r.json())
-      .then(({ data }) => { if (Array.isArray(data)) setGoogleAlerts(data); })
-      .catch(() => {});
-  }, [hasCalendarConnection, hasPeople]);
 
   // Merge Google + device-calendar alerts. Dedupe so a phone that syncs the
   // same Google event doesn't double-list it, then sort chronologically.
@@ -432,8 +488,8 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
         </div>
       </div>
 
-      {/* ── Google Calendar connect prompt ── */}
-      {hydrated && !hasCalendarConnection && !googleDismissed && (
+      {/* ── Google Calendar connect prompt (online only — OAuth needs network) ── */}
+      {hydrated && online && !hasCalendarConnection && !googleDismissed && (
         <ConnectCalendarBanner ko={ko} onDismiss={() => dismissGoogle(true)} />
       )}
 
@@ -471,6 +527,14 @@ export function CalendarView({ groups, hasCalendarConnection, hasPeople }: Props
               ▾
             </span>
           </button>
+
+          {!online && calendarSyncedAt && (
+            <p className="flex items-center gap-1.5 px-1 -mt-1 text-[10px]" style={{ color: "#9b8ec9" }}>
+              <WifiOff className="w-3 h-3 shrink-0" />
+              {ko ? "마지막 동기화: " : "Last updated "}
+              {formatRelativeDate(new Date(calendarSyncedAt).toISOString(), locale)}
+            </p>
+          )}
 
           {upcomingExpanded && upcomingAlerts.map((alert) => {
             const eventDate = dateKeyInZone(alert.event.start, timezone);

@@ -21,10 +21,21 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
+  // Snapshot the user profile so the account page can render offline (the home
+  // load is the single entry point that has the server `user`).
+  const initialProfile = {
+    email: user.email ?? null,
+    full_name: (user.user_metadata?.full_name as string | null) ?? null,
+    language: (user.user_metadata?.language as string | null) ?? null,
+    tz_mode: (user.user_metadata?.tz_mode as string | null) ?? null,
+    tz_value: (user.user_metadata?.tz_value as string | null) ?? null,
+  };
+
   return (
     <PeopleListClient
       initialPeople={people}
       hasCalendarConnection={!!calendarConnection}
+      initialProfile={initialProfile}
     />
   );
 }

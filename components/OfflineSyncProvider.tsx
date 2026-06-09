@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react";
 import { flushOutbox } from "@/lib/offline-queue";
 import { outboxCount, subscribeOffline } from "@/lib/offline-cache";
+import { ensurePersistentStorage } from "@/lib/storage-persist";
+import { restoreSnapshotIfEmpty, scheduleSnapshot } from "@/lib/offline-snapshot";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 export function OfflineSyncProvider() {
@@ -21,6 +23,16 @@ export function OfflineSyncProvider() {
       const n = await outboxCount();
       if (active) setPending(n);
     };
+
+    // Durability bootstrap: pin storage so the OS won't evict our data, restore
+    // from the native snapshot if IndexedDB was wiped (eviction / reinstall),
+    // then keep the snapshot updated on every local change.
+    void (async () => {
+      await ensurePersistentStorage();
+      await restoreSnapshotIfEmpty();
+    })();
+    const unsubSnap = subscribeOffline(scheduleSnapshot);
+
     void refresh();
 
     const unsub = subscribeOffline(refresh);
@@ -37,6 +49,7 @@ export function OfflineSyncProvider() {
     return () => {
       active = false;
       unsub();
+      unsubSnap();
       window.removeEventListener("online", onOnline);
     };
   }, []);

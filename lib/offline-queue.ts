@@ -248,14 +248,23 @@ export async function flushOutbox(): Promise<void> {
           headers: item.body !== undefined ? { "Content-Type": "application/json" } : undefined,
           body: item.body !== undefined ? JSON.stringify(item.body) : undefined,
         });
-        if (res.ok || (res.status >= 400 && res.status < 500)) {
-          // success, or a client error that won't succeed on retry → drop it
+        if (
+          res.ok ||
+          (res.status >= 400 &&
+            res.status < 500 &&
+            res.status !== 401 &&
+            res.status !== 403)
+        ) {
+          // success, or a permanent client error (400/404/409/422…) → drop it
           if (item.seq !== undefined) await removeFromOutbox(item.seq);
           if (!res.ok) {
             console.warn("[offline] dropped rejected write", item.method, item.url, res.status);
           }
         } else {
-          break; // 5xx/transient → keep it, retry later
+          // 401/403 (session may just need a refresh) or 5xx/transient → keep
+          // it and retry on the next online flush, so edits aren't lost when the
+          // token expired during a long offline period.
+          break;
         }
       } catch {
         break; // network died mid-flush → retry on next online

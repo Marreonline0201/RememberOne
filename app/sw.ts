@@ -53,7 +53,9 @@ const navigationCaching: RuntimeCaching[] = [
       request.headers.get("RSC") === "1" &&
       !request.headers.has("Next-Router-Segment-Prefetch"),
     handler: new StaleWhileRevalidate({
-      cacheName: "pages-rsc-full",
+      // -v2: bumped when the cached shells changed shape (calendar/account/meet
+      // became data-free client shells) so stale server-data RSCs aren't served.
+      cacheName: "pages-rsc-full-v2",
       matchOptions: { ignoreSearch: true, ignoreVary: true },
       plugins: pageExpiration(),
     }),
@@ -94,12 +96,19 @@ const serwist = new Serwist({
   },
 });
 
-// Drop the legacy navigation cache from earlier SW versions. The current SW
-// stores only full RSC renders in `pages-rsc-full`; the old `pages-rsc` could
-// hold partial/segment entries (or stale variants), so clear it once on update
-// to guarantee an offline navigation never gets served a loading-shell partial.
+// Drop legacy navigation caches from earlier SW versions so a stale entry can't
+// be served offline: `pages-rsc` (pre-unify, could hold loading-shell partials)
+// and `pages-rsc-full` (held calendar/account/meet RSCs with server data baked
+// in, before they became data-free client shells). The current SW reads/writes
+// `pages-rsc-full-v2`, so the first online load after this update re-warms the
+// new shells instead of serving stale server-rendered HTML.
 self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.delete("pages-rsc").catch(() => false));
+  event.waitUntil(
+    Promise.all([
+      caches.delete("pages-rsc"),
+      caches.delete("pages-rsc-full"),
+    ]).catch(() => false),
+  );
 });
 
 serwist.addEventListeners();
