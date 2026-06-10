@@ -54,10 +54,13 @@ export function WarmingProgress() {
     if (complete || !online) setPhase("ready");
   }, [phase, complete, online]);
 
-  // Safety net: never let "preparing" stick if warming stalls / partly fails.
+  // Safety net: if warming stalls / partly fails, dismiss SILENTLY after a cap —
+  // never force the "✓ Available offline" check, since offline may not actually be
+  // ready yet (e.g. a first login with many contacts on a slow link). Honest
+  // progress that quietly disappears beats a green check that lies.
   useEffect(() => {
     if (phase !== "preparing") return;
-    const t = setTimeout(() => setPhase("ready"), SAFETY_MS);
+    const t = setTimeout(() => setPhase("hidden"), SAFETY_MS);
     return () => clearTimeout(t);
   }, [phase]);
 
