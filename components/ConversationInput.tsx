@@ -839,7 +839,9 @@ export function ConversationInput({ personId, personName }: Props) {
             ? (ko ? "변환 중..." : "Transcribing...")
             : recording
               ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)}`
-              : t("meet.tap_to_speak")}
+              : !online
+                ? "" // offline: mic is shown turned off; no prompt label
+                : t("meet.tap_to_speak")}
         </p>
 
         {/* Hint while recording — explain auto-stop */}
