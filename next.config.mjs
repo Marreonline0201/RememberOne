@@ -51,6 +51,16 @@ const nextConfig = {
   turbopack: {},
   // Renamed from experimental.serverComponentsExternalPackages in Next 15+.
   serverExternalPackages: ["@google/generative-ai"],
+  experimental: {
+    // Next's default is { dynamic: 0, static: 300 } — with dynamic:0 the client
+    // router cache is OFF for dynamic routes, so a prefetched /people/[id] still
+    // does a server roundtrip on tap and shows the full-screen loading.tsx aura.
+    // Caching dynamic segments lets a tapped (prefetched) person open instantly
+    // from the router cache, no roundtrip, no loader. Safe here because the
+    // person route shell is data-free: PersonDetail loads data from IndexedDB and
+    // refreshes from /api on mount, so a cached shell can never show stale data.
+    staleTimes: { dynamic: 300, static: 300 },
+  },
   images: {
     remotePatterns: [
       {
