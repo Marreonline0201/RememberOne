@@ -1,62 +1,106 @@
 "use client";
 
-// Slim, non-blocking progress bar shown at the top of the home screen while the
-// offline cache warms (every page + person being fetched for offline use). The
-// home + cards stay fully usable underneath; a tapped card still opens instantly.
+// One-shot offline-readiness indicator shown at the top of the home screen on
+// each app launch, so the user can see whether the app is ready to work offline:
+//   - still caching  -> "Preparing offline…" progress bar
+//   - cached / done  -> "✓ Available offline" for ~1s, then it closes
 //
-// Anti-flash: on a warm-cache cold start (2nd+ launch) the warm fetches resolve
-// from the SW cache almost instantly, so we only reveal the bar if warming is
-// STILL in progress after a short grace window — otherwise it would flicker on
-// every app open.
+// Shown once per launch (module flag, reset on cold start = fresh JS context); a
+// tap into a card or a return to home mid-session does not re-trigger it. Driven
+// by subscribeWarmProgress() from lib/offline-warm.
 
 import { useEffect, useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { subscribeWarmProgress, type WarmProgress } from "@/lib/offline-warm";
+import { useOnline } from "@/lib/use-online";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-const GRACE_MS = 500;
+// Reset on cold start (new JS context) — so the indicator runs once per launch.
+let shownThisSession = false;
+
+const READY_MS = 1000; // how long the "✓ Available offline" state stays up
+const SAFETY_MS = 8000; // force-resolve if warming stalls so the bar never sticks
+
+type Phase = "preparing" | "ready" | "hidden";
 
 export function WarmingProgress() {
   const { language } = useLanguage();
   const ko = language === "ko";
+  const online = useOnline();
 
   const [progress, setProgress] = useState<WarmProgress>({
     done: 0,
     total: 0,
     active: false,
   });
-  const [revealed, setRevealed] = useState(false);
+  // Only the first home mount per launch runs the indicator; later mounts stay hidden.
+  const [phase, setPhase] = useState<Phase>(() =>
+    shownThisSession ? "hidden" : "preparing",
+  );
+
+  // Claim the one-shot slot for this launch.
+  useEffect(() => {
+    if (phase === "preparing") shownThisSession = true;
+  }, [phase]);
 
   useEffect(() => subscribeWarmProgress(setProgress), []);
 
-  const inProgress =
-    progress.active && progress.total > 0 && progress.done < progress.total;
+  const complete = progress.total > 0 && progress.done >= progress.total;
 
+  // preparing -> ready: warming finished, OR opened offline (already cache-backed,
+  // so offline is proven possible).
   useEffect(() => {
-    if (!inProgress) {
-      setRevealed(false);
-      return;
-    }
-    // Reveal only if still warming after the grace window.
-    const t = setTimeout(() => setRevealed(true), GRACE_MS);
+    if (phase !== "preparing") return;
+    if (complete || !online) setPhase("ready");
+  }, [phase, complete, online]);
+
+  // Safety net: never let "preparing" stick if warming stalls / partly fails.
+  useEffect(() => {
+    if (phase !== "preparing") return;
+    const t = setTimeout(() => setPhase("ready"), SAFETY_MS);
     return () => clearTimeout(t);
-  }, [inProgress]);
+  }, [phase]);
 
-  if (!revealed) return null;
+  // ready -> hidden after a beat.
+  useEffect(() => {
+    if (phase !== "ready") return;
+    const t = setTimeout(() => setPhase("hidden"), READY_MS);
+    return () => clearTimeout(t);
+  }, [phase]);
 
-  const pct = Math.round((progress.done / progress.total) * 100);
+  if (phase === "hidden") return null;
+
+  const ready = phase === "ready";
+  const pct = ready
+    ? 100
+    : progress.total > 0
+      ? Math.round((progress.done / progress.total) * 100)
+      : 8; // a sliver until we know the total
 
   return (
     <div className="mb-3" role="status" aria-live="polite">
       <div className="flex items-center justify-between mb-1">
         <span
-          className="text-[11px] uppercase tracking-wide"
-          style={{ color: "#5e7983", fontFamily: "'Hammersmith One', sans-serif" }}
+          className="text-[11px] uppercase tracking-wide flex items-center gap-1"
+          style={{
+            color: ready ? "#2f8f63" : "#5e7983",
+            fontFamily: "'Hammersmith One', sans-serif",
+          }}
         >
-          {ko ? "오프라인용으로 저장 중" : "Saving for offline"}
+          {ready && <CheckCircle2 className="w-3 h-3" />}
+          {ready
+            ? ko
+              ? "오프라인 사용 가능"
+              : "Available offline"
+            : ko
+              ? "오프라인용으로 준비 중"
+              : "Preparing offline"}
         </span>
-        <span className="text-[11px]" style={{ color: "#7a6b95" }}>
-          {progress.done}/{progress.total}
-        </span>
+        {!ready && progress.total > 0 && (
+          <span className="text-[11px]" style={{ color: "#7a6b95" }}>
+            {progress.done}/{progress.total}
+          </span>
+        )}
       </div>
       <div
         className="h-1.5 w-full rounded-full overflow-hidden"
@@ -66,7 +110,9 @@ export function WarmingProgress() {
           className="h-full rounded-full transition-[width] duration-300 ease-out"
           style={{
             width: `${pct}%`,
-            background: "linear-gradient(to right, #284e72, #482d7c)",
+            background: ready
+              ? "linear-gradient(to right, #2f8f63, #3f7a5e)"
+              : "linear-gradient(to right, #284e72, #482d7c)",
           }}
         />
       </div>

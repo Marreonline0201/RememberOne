@@ -66,14 +66,14 @@ export function PeopleListClient({
   }, [initialPeople]);
 
   // Warm the SW cache with every person's + key route's FULL RSC payload so each
-  // opens offline later. Deferred ~1s (after the home paints) and delegated to
+  // opens offline later. Deferred ~300ms (after the home paints) and delegated to
   // lib/offline-warm (concurrency 2, priority:"low" so a tap always wins the
   // network, deduped once per session, and it drives the WarmingProgress bar).
   // Skipped offline.
   useEffect(() => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     const paths = [...people.map((p) => `/people/${p.id}`), ...WARM_ROUTES];
-    const t = setTimeout(() => void warmPaths(paths, 2), 1000);
+    const t = setTimeout(() => void warmPaths(paths, 2), 300);
     return () => clearTimeout(t);
   }, [people]);
 
