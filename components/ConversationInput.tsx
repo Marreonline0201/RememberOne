@@ -29,6 +29,7 @@ import {
   X,
   ArrowLeft,
   Loader2,
+  WifiOff,
 } from "lucide-react";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -506,6 +507,7 @@ export function ConversationInput({ personId, personName }: Props) {
   }
 
   function toggleVoice() {
+    if (!online) return; // logging needs the network; mic is disabled offline
     if (recording) stopRecording();
     else void startRecording();
   }
@@ -589,32 +591,9 @@ export function ConversationInput({ personId, personName }: Props) {
     setStep("input");
   }
 
-  // ── OFFLINE ─────────────────────────────────────────────────────────────
-  // Logging needs the network (audio → Gemini transcription + extraction), so
-  // when offline we don't let the user record into a dead end — show why.
-  if (!online) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-        <div
-          className="w-20 h-20 rounded-full flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, #d0f2ff, #dccaff)" }}
-        >
-          <MicOff className="w-10 h-10" style={{ color: "#284e72" }} />
-        </div>
-        <p
-          className="text-[18px] uppercase text-black"
-          style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-        >
-          {ko ? "로그 기능을 사용할 수 없어요" : "Logging isn't available offline"}
-        </p>
-        <p className="text-[13px] max-w-xs" style={{ color: "#5e7983" }}>
-          {ko
-            ? "미팅 기록은 인터넷 연결이 필요해요. 연결되면 다시 시도해 주세요."
-            : "Logging a meeting needs a connection. Reconnect and try again."}
-        </p>
-      </div>
-    );
-  }
+  // Logging needs the network (audio → Gemini transcription + extraction). We no
+  // longer take over the whole screen offline; instead we keep the normal Meet UI
+  // and just disable + cross out the mic with a "logging unavailable" hint (below).
 
   // ── LOADING ─────────────────────────────────────────────────────────────
   if (step === "loading") {
@@ -757,7 +736,7 @@ export function ConversationInput({ personId, personName }: Props) {
   }
 
   // ── INPUT ────────────────────────────────────────────────────────────────
-  const micDisabled = isLoading || transcribing;
+  const micDisabled = isLoading || transcribing || !online;
   const showSubmit = text.trim().length > 0 && !recording && !transcribing;
 
   return (
@@ -840,6 +819,8 @@ export function ConversationInput({ personId, personName }: Props) {
                 <Loader2 className="w-10 h-10 text-white animate-spin" />
               ) : recording ? (
                 <MicOff className="w-10 h-10 text-white" />
+              ) : !online ? (
+                <MicOff className="w-10 h-10" style={{ color: "#9aa7b0" }} />
               ) : (
                 <Mic className="w-10 h-10" style={{ color: "#482d7c" }} />
               )}
@@ -859,8 +840,23 @@ export function ConversationInput({ personId, personName }: Props) {
             ? (ko ? "변환 중..." : "Transcribing...")
             : recording
               ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)}`
-              : t("meet.tap_to_speak")}
+              : !online
+                ? (ko ? "오프라인에서는 기록할 수 없어요" : "Logging unavailable offline")
+                : t("meet.tap_to_speak")}
         </p>
+
+        {/* Offline hint — logging needs the network (mic disabled above) */}
+        {!online && !recording && !transcribing && (
+          <p
+            className="text-[11px] text-center -mt-3 flex items-center justify-center gap-1"
+            style={{ color: "#7a6b95" }}
+          >
+            <WifiOff className="w-3 h-3" />
+            {ko
+              ? "미팅 기록은 인터넷 연결이 필요해요"
+              : "Logging a meeting needs a connection"}
+          </p>
+        )}
 
         {/* Hint while recording — explain auto-stop */}
         {recording && (
@@ -941,8 +937,11 @@ export function ConversationInput({ personId, personName }: Props) {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isLoading}
-            className="w-full h-12 rounded-[10px_2px_10px_2px] text-white flex items-center justify-center gap-2 transition-opacity active:opacity-80"
+            disabled={isLoading || !online}
+            className={cn(
+              "w-full h-12 rounded-[10px_2px_10px_2px] text-white flex items-center justify-center gap-2 transition-opacity active:opacity-80",
+              !online && "opacity-60"
+            )}
             style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
           >
             <Sparkles className="w-4 h-4" />
