@@ -29,7 +29,6 @@ import {
   X,
   ArrowLeft,
   Loader2,
-  WifiOff,
 } from "lucide-react";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -591,9 +590,9 @@ export function ConversationInput({ personId, personName }: Props) {
     setStep("input");
   }
 
-  // Logging needs the network (audio → Gemini transcription + extraction). We no
-  // longer take over the whole screen offline; instead we keep the normal Meet UI
-  // and just disable + cross out the mic with a "logging unavailable" hint (below).
+  // Logging needs the network (audio → Gemini transcription + extraction). We
+  // keep the normal Meet UI offline and only show the mic turned off — disabled
+  // and crossed out (see micDisabled + the mic icon below).
 
   // ── LOADING ─────────────────────────────────────────────────────────────
   if (step === "loading") {
@@ -840,23 +839,8 @@ export function ConversationInput({ personId, personName }: Props) {
             ? (ko ? "변환 중..." : "Transcribing...")
             : recording
               ? `${ko ? "녹음 중" : "Recording"} ${formatDuration(duration)}`
-              : !online
-                ? (ko ? "오프라인에서는 기록할 수 없어요" : "Logging unavailable offline")
-                : t("meet.tap_to_speak")}
+              : t("meet.tap_to_speak")}
         </p>
-
-        {/* Offline hint — logging needs the network (mic disabled above) */}
-        {!online && !recording && !transcribing && (
-          <p
-            className="text-[11px] text-center -mt-3 flex items-center justify-center gap-1"
-            style={{ color: "#7a6b95" }}
-          >
-            <WifiOff className="w-3 h-3" />
-            {ko
-              ? "미팅 기록은 인터넷 연결이 필요해요"
-              : "Logging a meeting needs a connection"}
-          </p>
-        )}
 
         {/* Hint while recording — explain auto-stop */}
         {recording && (
@@ -937,11 +921,8 @@ export function ConversationInput({ personId, personName }: Props) {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isLoading || !online}
-            className={cn(
-              "w-full h-12 rounded-[10px_2px_10px_2px] text-white flex items-center justify-center gap-2 transition-opacity active:opacity-80",
-              !online && "opacity-60"
-            )}
+            disabled={isLoading}
+            className="w-full h-12 rounded-[10px_2px_10px_2px] text-white flex items-center justify-center gap-2 transition-opacity active:opacity-80"
             style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
           >
             <Sparkles className="w-4 h-4" />
