@@ -18,9 +18,11 @@ import {
 const PLUGIN_NAME = "CapacitorCalendar";
 
 export interface DeviceEventInput {
-  date: string; // "YYYY-MM-DD" wall-clock in `timeZone`
-  time: string | null; // "HH:mm" — null = all-day
-  durationMin: number;
+  startDate: string; // "YYYY-MM-DD" wall-clock in `timeZone`
+  startTime: string | null; // "HH:mm" — null when all-day
+  endDate: string; // "YYYY-MM-DD" — INCLUSIVE last day for all-day events
+  endTime: string | null;
+  allDay: boolean;
   timeZone: string; // IANA zone the wall clock is expressed in
   title: string;
   personId: string; // picked person's id, or "me"
@@ -84,11 +86,10 @@ function epochFromZonedWallClock(
   return wallAsUtc - zoneOffsetMs(guess, timeZone);
 }
 
-// Android stores all-day events as UTC day spans.
-function allDayUtcRange(date: string): { start: number; end: number } {
+// Android stores all-day events as UTC day spans. Midnight UTC of a date key.
+function allDayUtcStart(date: string): number {
   const [y, m, d] = date.split("-").map(Number);
-  const start = Date.UTC(y, m - 1, d);
-  return { start, end: start + 24 * 60 * 60 * 1000 };
+  return Date.UTC(y, m - 1, d);
 }
 
 function eventRange(input: DeviceEventInput): {
@@ -96,14 +97,26 @@ function eventRange(input: DeviceEventInput): {
   endDate: number;
   isAllDay: boolean;
 } {
-  if (!input.time) {
-    const { start, end } = allDayUtcRange(input.date);
-    return { startDate: start, endDate: end, isAllDay: true };
+  if (input.allDay || !input.startTime || !input.endTime) {
+    // endDate is the inclusive last day → span ends at the start of the day
+    // AFTER it.
+    return {
+      startDate: allDayUtcStart(input.startDate),
+      endDate: allDayUtcStart(input.endDate) + 24 * 60 * 60 * 1000,
+      isAllDay: true,
+    };
   }
-  const start = epochFromZonedWallClock(input.date, input.time, input.timeZone);
   return {
-    startDate: start,
-    endDate: start + input.durationMin * 60 * 1000,
+    startDate: epochFromZonedWallClock(
+      input.startDate,
+      input.startTime,
+      input.timeZone
+    ),
+    endDate: epochFromZonedWallClock(
+      input.endDate,
+      input.endTime,
+      input.timeZone
+    ),
     isAllDay: false,
   };
 }

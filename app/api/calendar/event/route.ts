@@ -20,15 +20,17 @@ import {
   APP_EVENT_TAG_KEY,
 } from "@/lib/google-calendar";
 import { decryptToken, decryptTokenOptional, encryptToken } from "@/lib/crypto";
-import { todayKeyInZone } from "@/lib/utils";
+import { todayKeyInZone, addDaysToKey } from "@/lib/utils";
 
 // ── Input validation ────────────────────────────────────────────────────────
 
 interface EventInput {
-  date: string; // "YYYY-MM-DD" (in the user's timezone)
-  time: string | null; // "HH:mm" — null = all-day
-  durationMin: number;
-  timeZone: string; // IANA zone the date/time are expressed in
+  startDate: string; // "YYYY-MM-DD" (in the user's timezone)
+  startTime: string | null; // "HH:mm" — null when all-day
+  endDate: string; // "YYYY-MM-DD" — INCLUSIVE last day for all-day events
+  endTime: string | null;
+  allDay: boolean;
+  timeZone: string; // IANA zone the dates/times are expressed in
   title: string;
   personId: string; // picked person's id, or "me"
   location: string | null;
@@ -48,59 +50,14 @@ function isValidTimeZone(tz: string): boolean {
   }
 }
 
-function parseEventInput(raw: unknown): EventInput | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const r = raw as Record<string, unknown>;
-
-  const date = typeof r.date === "string" ? r.date : "";
-  if (!DATE_RE.test(date)) return null;
-
-  const time =
-    r.time === null || r.time === undefined || r.time === ""
-      ? null
-      : typeof r.time === "string" && TIME_RE.test(r.time)
-        ? r.time
-        : undefined;
-  if (time === undefined) return null;
-
-  const durationRaw = typeof r.durationMin === "number" ? r.durationMin : 60;
-  const durationMin = Math.min(1440, Math.max(5, Math.round(durationRaw)));
-
-  const timeZone = typeof r.timeZone === "string" ? r.timeZone : "";
-  if (!timeZone || !isValidTimeZone(timeZone)) return null;
-
-  const title =
-    (typeof r.title === "string" ? r.title.trim().slice(0, 200) : "") ||
-    "(No title)";
-
-  const personId =
-    typeof r.personId === "string" && r.personId.trim()
-      ? r.personId.trim().slice(0, 64)
-      : "me";
-
-  const location =
-    typeof r.location === "string" && r.location.trim()
-      ? r.location.trim().slice(0, 300)
-      : null;
-  const note =
-    typeof r.note === "string" && r.note.trim()
-      ? r.note.trim().slice(0, 2000)
-      : null;
-
-  const eventId =
-    typeof r.eventId === "string" && r.eventId.trim()
-      ? r.eventId.trim().slice(0, 200)
-      : undefined;
-
-  return { date, time, durationMin, timeZone, title, personId, location, note, eventId };
+// null = explicitly all-day; undefined = malformed (reject).
+function normTime(v: unknown): string | null | undefined {
+  if (v === null || v === undefined || v === "") return null;
+  return typeof v === "string" && TIME_RE.test(v) ? v : undefined;
 }
 
-// ── Wall-clock date math ────────────────────────────────────────────────────
-// We never convert between zones here — the client sends the wall-clock date/
-// time plus the IANA zone, and Google gets { dateTime: wallClock, timeZone }.
-// Treating the wall clock as UTC is purely an arithmetic trick to add minutes
-// and roll over days correctly.
-
+// Add minutes to a wall-clock date/time (UTC arithmetic, no zone conversion) —
+// only used by the back-compat path that derives an end from a duration.
 function addMinutesWallClock(
   date: string,
   time: string,
@@ -115,8 +72,93 @@ function addMinutesWallClock(
   };
 }
 
-function nextDay(date: string): string {
-  return addMinutesWallClock(date, "00:00", 24 * 60).date;
+function parseEventInput(raw: unknown): EventInput | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+
+  const timeZone = typeof r.timeZone === "string" ? r.timeZone : "";
+  if (!timeZone || !isValidTimeZone(timeZone)) return null;
+
+  const title =
+    (typeof r.title === "string" ? r.title.trim().slice(0, 200) : "") ||
+    "(No title)";
+  const personId =
+    typeof r.personId === "string" && r.personId.trim()
+      ? r.personId.trim().slice(0, 64)
+      : "me";
+  const location =
+    typeof r.location === "string" && r.location.trim()
+      ? r.location.trim().slice(0, 300)
+      : null;
+  const note =
+    typeof r.note === "string" && r.note.trim()
+      ? r.note.trim().slice(0, 2000)
+      : null;
+  const eventId =
+    typeof r.eventId === "string" && r.eventId.trim()
+      ? r.eventId.trim().slice(0, 200)
+      : undefined;
+
+  let startDate: string;
+  let endDate: string;
+  let startTime: string | null;
+  let endTime: string | null;
+  let allDay: boolean;
+
+  if (typeof r.startDate === "string") {
+    // New shape: explicit start/end + all-day flag.
+    startDate = r.startDate;
+    endDate = typeof r.endDate === "string" ? r.endDate : startDate;
+    if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate)) return null;
+    allDay = r.allDay === true;
+    if (allDay) {
+      startTime = null;
+      endTime = null;
+      if (endDate < startDate) return null; // single day allowed (equal)
+    } else {
+      const st = normTime(r.startTime);
+      const et = normTime(r.endTime);
+      if (!st || !et) return null; // a timed event needs both times
+      startTime = st;
+      endTime = et;
+      if (`${endDate}T${endTime}` <= `${startDate}T${startTime}`) return null;
+    }
+  } else {
+    // Back-compat: the pre-redesign client bundle sends { date, time,
+    // durationMin } (reachable during the one-launch service-worker window).
+    const date = typeof r.date === "string" ? r.date : "";
+    if (!DATE_RE.test(date)) return null;
+    const t = normTime(r.time);
+    if (t === undefined) return null;
+    if (t === null) {
+      allDay = true;
+      startDate = endDate = date;
+      startTime = endTime = null;
+    } else {
+      allDay = false;
+      const durRaw = typeof r.durationMin === "number" ? r.durationMin : 60;
+      const dur = Math.min(1440, Math.max(5, Math.round(durRaw)));
+      const e = addMinutesWallClock(date, t, dur);
+      startDate = date;
+      startTime = t;
+      endDate = e.date;
+      endTime = e.time;
+    }
+  }
+
+  return {
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    allDay,
+    timeZone,
+    title,
+    personId,
+    location,
+    note,
+    eventId,
+  };
 }
 
 // Google event body from validated input. PATCH must explicitly null the
@@ -126,22 +168,32 @@ function buildEventBody(
   input: EventInput,
   forPatch: boolean
 ): calendar_v3.Schema$Event {
-  const { date, time, durationMin, timeZone, title, personId, location, note } =
-    input;
+  const {
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    allDay,
+    timeZone,
+    title,
+    personId,
+    location,
+    note,
+  } = input;
 
   let start: calendar_v3.Schema$EventDateTime;
   let end: calendar_v3.Schema$EventDateTime;
-  if (time) {
-    const e = addMinutesWallClock(date, time, durationMin);
-    start = { dateTime: `${date}T${time}:00`, timeZone };
-    end = { dateTime: `${e.date}T${e.time}:00`, timeZone };
+  if (!allDay && startTime && endTime) {
+    start = { dateTime: `${startDate}T${startTime}:00`, timeZone };
+    end = { dateTime: `${endDate}T${endTime}:00`, timeZone };
     if (forPatch) {
       start.date = null;
       end.date = null;
     }
   } else {
-    start = { date };
-    end = { date: nextDay(date) };
+    // Google all-day end is EXCLUSIVE; our endDate is the inclusive last day.
+    start = { date: startDate };
+    end = { date: addDaysToKey(endDate, 1) };
     if (forPatch) {
       start.dateTime = null;
       end.dateTime = null;
@@ -270,7 +322,7 @@ export async function POST(request: NextRequest) {
   }
 
   // The UI only offers today/future dates; enforce it here too.
-  if (input.date < todayKeyInZone(input.timeZone)) {
+  if (input.startDate < todayKeyInZone(input.timeZone)) {
     return NextResponse.json(
       { data: null, error: "past_date" },
       { status: 400 }
@@ -306,12 +358,9 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  if (input.date < todayKeyInZone(input.timeZone)) {
-    return NextResponse.json(
-      { data: null, error: "past_date" },
-      { status: 400 }
-    );
-  }
+  // No past-date guard on edit: an ongoing/multi-day event legitimately has a
+  // start before today, and editing it (even just the note) must still work.
+  // (The guard stays on POST so new events can't be back-dated.)
 
   try {
     const { event, newAccessToken } = await patchCalendarEvent(

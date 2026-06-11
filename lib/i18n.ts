@@ -204,6 +204,12 @@ const keys: Translations = {
   "calendar.no_people_found": { en: "No matching people", ko: "일치하는 사람 없음" },
   "calendar.time": { en: "Time", ko: "시간" },
   "calendar.all_day": { en: "All day", ko: "하루 종일" },
+  "calendar.start": { en: "Start", ko: "시작" },
+  "calendar.end": { en: "End", ko: "종료" },
+  "calendar.end_before_start": {
+    en: "End must be after the start.",
+    ko: "종료는 시작보다 늦어야 해요.",
+  },
   "calendar.details": { en: "Details", ko: "세부 정보" },
   "calendar.event_title": { en: "Title", ko: "제목" },
   "calendar.duration": { en: "Duration", ko: "소요 시간" },
