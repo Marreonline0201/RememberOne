@@ -3,11 +3,10 @@
 // Add / edit a Google Calendar event from the in-app calendar.
 //
 // Flow (per the calendar add button): pick who you're meeting (a saved person
-// or "Just me"), optionally a time (empty = all-day), and optional details in
-// a collapsible accordion (custom title, duration, location, note — plus the
-// date itself in edit mode). Saving writes to Google Calendar via
-// /api/calendar/event; the phone's calendar then shows it through the phone's
-// own Google account sync.
+// or "Just me"), set Start and End (date + time, or an All-day span), and
+// optional details in a collapsible accordion (custom title, location, note).
+// Saving writes to the phone's calendar (native) or Google Calendar (web /
+// fallback) via /api/calendar/event.
 //
 // The dialog also owns the two non-form states:
 //   - no connection      → Connect Google Calendar prompt
@@ -15,7 +14,7 @@
 //     "reauth_required" for connections granted under the old readonly scope)
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, User, X } from "lucide-react";
+import { ChevronDown, User } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -78,11 +77,18 @@ function toHHmm(iso: string, timeZone: string): string {
   }
 }
 
-function durationFromEvent(e: CalendarEvent): number {
-  if (!e.start.includes("T") || !e.end.includes("T")) return 60;
-  const ms = new Date(e.end).getTime() - new Date(e.start).getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return 60;
-  return Math.min(1440, Math.max(5, Math.round(ms / 60000)));
+// Add one hour to a wall-clock date/time, rolling the date over midnight (UTC
+// arithmetic only — no zone conversion). Used to auto-follow the end with the
+// start when the user hasn't set the end by hand.
+function plusOneHour(date: string, time: string): { date: string; time: string } {
+  const d = new Date(`${date}T${time}:00Z`);
+  if (Number.isNaN(d.getTime())) return { date, time };
+  d.setUTCMinutes(d.getUTCMinutes() + 60);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`,
+    time: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`,
+  };
 }
 
 const inputStyle = {
@@ -108,14 +114,18 @@ export function AddCalendarEventDialog({
   const { timezone } = useTimezone();
 
   const [personId, setPersonId] = useState<string>("me");
-  const [date, setDate] = useState(dateKey);
-  const [time, setTime] = useState(""); // "" = all-day
-  const [duration, setDuration] = useState(60);
+  const [allDay, setAllDay] = useState(false);
+  const [startDate, setStartDate] = useState(dateKey);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endDate, setEndDate] = useState(dateKey);
+  const [endTime, setEndTime] = useState("10:00");
   const [title, setTitle] = useState(""); // "" = auto-generated
   const [location, setLocation] = useState("");
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Once the user edits the End by hand, stop auto-following it from the Start.
+  const endTouched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
@@ -135,9 +145,24 @@ export function AddCalendarEventDialog({
         // (device events carry no tag); else "me".
         const resolvedPersonId = editing.appPersonId ?? editingPersonId ?? "me";
         setPersonId(resolvedPersonId);
-        setDate(dateKeyInZone(editing.start, timezone));
-        setTime(editing.start.includes("T") ? toHHmm(editing.start, timezone) : "");
-        setDuration(durationFromEvent(editing));
+
+        const isAllDay = !editing.start.includes("T");
+        setAllDay(isAllDay);
+        const sDate = dateKeyInZone(editing.start, timezone);
+        setStartDate(sDate);
+        if (isAllDay) {
+          // Stored all-day end is EXCLUSIVE; show the inclusive last day.
+          const endIncl = addDaysToKey(dateKeyInZone(editing.end, timezone), -1);
+          setEndDate(endIncl < sDate ? sDate : endIncl);
+          setStartTime("09:00");
+          setEndTime("10:00");
+        } else {
+          setStartTime(toHHmm(editing.start, timezone) || "09:00");
+          setEndDate(dateKeyInZone(editing.end, timezone));
+          setEndTime(toHHmm(editing.end, timezone) || "10:00");
+        }
+        endTouched.current = true; // an existing event has an explicit end
+
         // Auto-generated titles must STAY auto: prefill blank when the summary
         // is exactly the prefilled person's auto title, so switching the person
         // re-titles the event instead of keeping a stale "Meet {old name}".
@@ -155,9 +180,12 @@ export function AddCalendarEventDialog({
         setNote(editing.description ?? "");
       } else {
         setPersonId("me");
-        setDate(dateKey);
-        setTime("");
-        setDuration(60);
+        setAllDay(false);
+        setStartDate(dateKey);
+        setEndDate(dateKey);
+        setStartTime("09:00");
+        setEndTime("10:00");
+        endTouched.current = false;
         setTitle("");
         setLocation("");
         setNote("");
@@ -205,14 +233,38 @@ export function AddCalendarEventDialog({
       : `Meet ${selectedPerson.name}`
     : t("calendar.personal_plan");
 
-  const durationOptions = useMemo(() => {
-    const base = [30, 60, 90, 120];
-    return base.includes(duration)
-      ? base
-      : [...base, duration].sort((a, b) => a - b);
-  }, [duration]);
-  const durationLabel = (m: number) =>
-    m % 60 === 0 ? (ko ? `${m / 60}시간` : `${m / 60} h`) : ko ? `${m}분` : `${m} min`;
+  const maxDate = addDaysToKey(todayKey, MAX_ADD_DAYS_AHEAD);
+
+  // End must be after start (all-day: end date on/after start date). A timed
+  // event with a cleared time is invalid — block it rather than let the device
+  // path silently save it as all-day or the Google path 400 with no hint.
+  const timeError = useMemo(() => {
+    if (allDay) return endDate < startDate;
+    if (!startTime || !endTime) return true;
+    return `${endDate}T${endTime}` <= `${startDate}T${startTime}`;
+  }, [allDay, startDate, startTime, endDate, endTime]);
+
+  // Start changes: keep the end aligned until the user sets it by hand.
+  const onStartDateChange = (v: string) => {
+    setStartDate(v);
+    if (!endTouched.current) {
+      // Re-derive the end so a past-midnight roll doesn't strand the end time
+      // on the old day.
+      const n = startTime ? plusOneHour(v, startTime) : { date: v, time: endTime };
+      setEndDate(n.date);
+      setEndTime(n.time);
+    } else if (endDate < v) {
+      setEndDate(v);
+    }
+  };
+  const onStartTimeChange = (v: string) => {
+    setStartTime(v);
+    if (!endTouched.current && v) {
+      const n = plusOneHour(startDate, v);
+      setEndDate(n.date);
+      setEndTime(n.time);
+    }
+  };
 
   // When the Google connect/reconnect prompt takes over the dialog body:
   // - needsReauth means a Google-routed write already failed on scope/session —
@@ -225,9 +277,11 @@ export function AddCalendarEventDialog({
 
   // Wall-clock fields shared by both write paths.
   const eventInput = () => ({
-    date,
-    time: time || null,
-    durationMin: duration,
+    startDate,
+    startTime: allDay ? null : startTime,
+    endDate,
+    endTime: allDay ? null : endTime,
+    allDay,
     timeZone: timezone,
     title: title.trim() || autoTitle,
     personId,
@@ -284,6 +338,10 @@ export function AddCalendarEventDialog({
 
   async function submit() {
     if (saving) return;
+    if (timeError) {
+      setError(t("calendar.end_before_start"));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -399,7 +457,7 @@ export function AddCalendarEventDialog({
             {editing ? t("calendar.edit_meeting") : t("calendar.add_meeting")}
           </DialogTitle>
           <DialogDescription className="text-left text-[12px]" style={{ color: "#5e7983" }}>
-            {formatDate(date, locale)}
+            {formatDate(startDate, locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -486,34 +544,98 @@ export function AddCalendarEventDialog({
               </div>
             </div>
 
-            {/* Time (empty = all-day) */}
-            <div className="flex items-center gap-3">
-              <span
-                className="text-[11px] uppercase tracking-wide w-16 flex-shrink-0"
-                style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#5e7983" }}
-              >
-                {t("calendar.time")}
-              </span>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="flex-1 h-10 px-3 rounded-xl text-[14px] outline-none"
-                style={inputStyle}
-              />
-              {time ? (
-                <button
-                  type="button"
-                  onClick={() => setTime("")}
-                  aria-label={ko ? "시간 지우기" : "Clear time"}
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-black/40 hover:text-black hover:bg-black/5 transition-colors flex-shrink-0"
+            {/* When — All-day toggle + Start/End date & time */}
+            <div className="space-y-2.5">
+              {/* All-day switch */}
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-[11px] uppercase tracking-wide"
+                  style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#5e7983" }}
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              ) : (
-                <span className="text-[11px] flex-shrink-0" style={{ color: "#9b8ec9" }}>
                   {t("calendar.all_day")}
                 </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={allDay}
+                  aria-label={t("calendar.all_day")}
+                  onClick={() => setAllDay((v) => !v)}
+                  className="relative shrink-0 w-11 h-6 rounded-full transition-colors"
+                  style={{ backgroundColor: allDay ? "#284e72" : "#cdbce8" }}
+                >
+                  <span
+                    className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                    style={{ transform: allDay ? "translateX(20px)" : "translateX(0)" }}
+                  />
+                </button>
+              </div>
+
+              {/* Start */}
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-[11px] uppercase tracking-wide w-10 flex-shrink-0"
+                  style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#5e7983" }}
+                >
+                  {t("calendar.start")}
+                </span>
+                <input
+                  type="date"
+                  value={startDate}
+                  min={todayKey}
+                  max={maxDate}
+                  onChange={(e) => onStartDateChange(e.target.value)}
+                  className="flex-1 min-w-0 h-10 px-2 rounded-xl text-[13px] outline-none"
+                  style={inputStyle}
+                />
+                {!allDay && (
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => onStartTimeChange(e.target.value)}
+                    className="w-[94px] flex-shrink-0 h-10 px-2 rounded-xl text-[13px] outline-none"
+                    style={inputStyle}
+                  />
+                )}
+              </div>
+
+              {/* End */}
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-[11px] uppercase tracking-wide w-10 flex-shrink-0"
+                  style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#5e7983" }}
+                >
+                  {t("calendar.end")}
+                </span>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate}
+                  max={maxDate}
+                  onChange={(e) => {
+                    endTouched.current = true;
+                    setEndDate(e.target.value);
+                  }}
+                  className="flex-1 min-w-0 h-10 px-2 rounded-xl text-[13px] outline-none"
+                  style={inputStyle}
+                />
+                {!allDay && (
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => {
+                      endTouched.current = true;
+                      setEndTime(e.target.value);
+                    }}
+                    className="w-[94px] flex-shrink-0 h-10 px-2 rounded-xl text-[13px] outline-none"
+                    style={inputStyle}
+                  />
+                )}
+              </div>
+
+              {timeError && (
+                <p className="text-[11px]" style={{ color: "#c0392b" }}>
+                  {t("calendar.end_before_start")}
+                </p>
               )}
             </div>
 
@@ -550,25 +672,6 @@ export function AddCalendarEventDialog({
                     className="w-full h-10 px-3 rounded-xl text-[13px] outline-none"
                     style={inputStyle}
                   />
-                  {time && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-[12px] w-16 flex-shrink-0" style={{ color: "#5e7983" }}>
-                        {t("calendar.duration")}
-                      </span>
-                      <select
-                        value={duration}
-                        onChange={(e) => setDuration(parseInt(e.target.value, 10))}
-                        className="flex-1 h-10 px-2 rounded-xl text-[13px] outline-none"
-                        style={inputStyle}
-                      >
-                        {durationOptions.map((m) => (
-                          <option key={m} value={m}>
-                            {durationLabel(m)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                   <input
                     type="text"
                     value={location}
@@ -587,22 +690,6 @@ export function AddCalendarEventDialog({
                     className="w-full px-3 py-2 rounded-xl text-[13px] outline-none resize-none"
                     style={inputStyle}
                   />
-                  {editing && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-[12px] w-16 flex-shrink-0" style={{ color: "#5e7983" }}>
-                        {t("calendar.date")}
-                      </span>
-                      <input
-                        type="date"
-                        value={date}
-                        min={todayKey}
-                        max={addDaysToKey(todayKey, MAX_ADD_DAYS_AHEAD)}
-                        onChange={(e) => setDate(e.target.value)}
-                        className="flex-1 h-10 px-3 rounded-xl text-[13px] outline-none"
-                        style={inputStyle}
-                      />
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -616,7 +703,7 @@ export function AddCalendarEventDialog({
             {/* Actions */}
             <button
               onClick={submit}
-              disabled={saving}
+              disabled={saving || timeError}
               className="w-full py-2.5 rounded-xl text-[13px] font-medium text-white transition-opacity active:opacity-80 disabled:opacity-60"
               style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
             >
