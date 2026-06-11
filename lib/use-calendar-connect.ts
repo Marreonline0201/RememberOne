@@ -16,11 +16,17 @@ import { useToast } from "@/components/ui/use-toast";
 
 const APP_LINK_PREFIX = "https://rememberone.online/auth/callback";
 
-export function useCalendarConnect() {
+export function useCalendarConnect(onConnected?: () => void) {
   const router = useRouter();
   const { toast } = useToast();
   const [connecting, setConnecting] = useState(false);
   const busyRef = useRef(false);
+
+  // Ref so the (stable) appUrlOpen listener always calls the latest callback
+  // without re-binding. Only the native path fires it — the web path leaves
+  // the page entirely (full redirect through Google), so callers can't react.
+  const onConnectedRef = useRef(onConnected);
+  onConnectedRef.current = onConnected;
 
   // Native only: catch the OAuth return that re-enters the app via the app link.
   useEffect(() => {
@@ -84,6 +90,7 @@ export function useCalendarConnect() {
               throw new Error(message);
             }
             toast({ title: "Google Calendar connected" });
+            onConnectedRef.current?.();
             router.refresh();
           } catch (err: unknown) {
             console.error("[calendar connect] exchange failed:", err);

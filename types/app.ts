@@ -58,10 +58,16 @@ export interface CalendarEvent {
   id: string;
   summary: string;                  // event title
   description: string | null;
-  start: string;                    // ISO datetime
+  location: string | null;
+  start: string;                    // ISO datetime (or "YYYY-MM-DD" for all-day)
   end: string;
   attendees: CalendarAttendee[];
   htmlLink: string;
+  // Set when the event was created from this app (tagged via Google
+  // extendedProperties.private) — gates the in-app edit/delete affordances.
+  // Optional: events cached before this field existed simply lack it.
+  appCreated?: boolean;
+  appPersonId?: string | null;      // the picked person's id, or "me"
 }
 
 export interface CalendarAttendee {

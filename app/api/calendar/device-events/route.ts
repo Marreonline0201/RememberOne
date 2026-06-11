@@ -21,6 +21,7 @@ const eventSchema = z.object({
   id: z.string(),
   summary: z.string(),
   description: z.string().nullable().default(null),
+  location: z.string().nullable().default(null),
   start: z.string(),
   end: z.string().default(""),
   attendees: z.array(attendeeSchema).default([]),

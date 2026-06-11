@@ -20,7 +20,6 @@ export async function matchEventsToPeople(
   if (events.length === 0) return [];
 
   const people = await getAllPeople(supabase, userId);
-  if (people.length === 0) return [];
 
   const alerts: UpcomingMeetingAlert[] = [];
 
@@ -43,7 +42,9 @@ export async function matchEventsToPeople(
       }
     }
 
-    if (matchedPeopleIds.length > 0) {
+    // Unmatched events are dropped — EXCEPT events created from this app
+    // (e.g. a "Just me" event matches no saved person but must still show).
+    if (matchedPeopleIds.length > 0 || event.appCreated) {
       const matchedPeopleFull = await Promise.all(
         matchedPeopleIds.map((id) => getPersonFull(supabase, id, userId))
       );

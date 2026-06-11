@@ -3,13 +3,22 @@
 // matches attendee names/emails against saved people, and returns alerts.
 
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchUpcomingEvents } from "@/lib/google-calendar";
 import { matchEventsToPeople } from "@/lib/calendar-match";
 import { decryptToken, decryptTokenOptional, encryptToken } from "@/lib/crypto";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Window size: home alerts use the 7-day default; the calendar page asks
+    // for ~62 days so created events show on the visible month + next.
+    const daysParam = parseInt(
+      request.nextUrl.searchParams.get("days") ?? "",
+      10
+    );
+    const days = Number.isNaN(daysParam) ? 7 : Math.min(62, Math.max(1, daysParam));
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -42,7 +51,9 @@ export async function GET() {
         decryptToken(connection.access_token),
         decryptTokenOptional(connection.refresh_token),
         connection.token_expiry,
-        connection.calendar_id
+        connection.calendar_id,
+        days,
+        days > 7 ? 250 : 50
       ));
     } catch (googleErr: unknown) {
       // If the token is revoked or expired beyond refresh, remove the stale

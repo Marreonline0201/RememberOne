@@ -2,10 +2,10 @@
 
 // CalendarView — monthly grid calendar with meeting dots and upcoming event indicators.
 
-import { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { X, WifiOff } from "lucide-react";
+import { X, WifiOff, Plus, Pencil } from "lucide-react";
 import { formatDate, formatRelativeDate, localizeKey, formatTimeInZone, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -16,6 +16,7 @@ import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import { useDeviceCalendar } from "@/lib/use-device-calendar";
 import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
 import { groupMeetingsByDate } from "@/lib/calendar-group";
+import { AddCalendarEventDialog } from "@/components/AddCalendarEventDialog";
 import {
   getCachedPeople,
   getCachedConnectionFlag,
@@ -24,7 +25,11 @@ import {
   subscribeOffline,
   type CachedCalendar,
 } from "@/lib/offline-cache";
-import type { PersonFull, UpcomingMeetingAlert as UpcomingAlertType } from "@/types/app";
+import type {
+  CalendarEvent,
+  PersonFull,
+  UpcomingMeetingAlert as UpcomingAlertType,
+} from "@/types/app";
 
 const INTEREST_KEYS = ["interest", "hobby", "hobbies", "sport", "sports", "passion", "likes"];
 function isInterest(key: string) {
@@ -177,9 +182,141 @@ function DeviceCalendarPrompt({
   );
 }
 
+// ── Upcoming event card ──────────────────────────────────────
+// One Google/device event with its matched person cards. Used by both the
+// "Upcoming Meetings" list and the selected-date section. App-created events
+// (event.appCreated) get a pencil that opens the edit dialog.
+function UpcomingEventCard({
+  alert,
+  language,
+  locale,
+  timezone,
+  allDayLabel,
+  onEdit,
+}: {
+  alert: UpcomingAlertType;
+  language: string;
+  locale: string;
+  timezone: string;
+  allDayLabel: string;
+  onEdit?: (event: CalendarEvent) => void;
+}) {
+  const eventDate = dateKeyInZone(alert.event.start, timezone);
+  const isAllDay = !alert.event.start.includes("T");
+  const eventTime = isAllDay
+    ? allDayLabel
+    : formatTimeInZone(alert.event.start, timezone, locale);
+
+  return (
+    <div
+      className="p-4"
+      style={{
+        borderRadius: "10px 2px 10px 2px",
+        background: "linear-gradient(52deg, #eef7ff 0%, #ede8ff 100%)",
+        border: "1.5px solid #dccaff",
+      }}
+    >
+      {/* Event title + time (+ edit for app-created events) */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className="text-[16px] text-black leading-tight flex-1 min-w-0"
+            style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+          >
+            {alert.event.summary}
+          </p>
+          <div className="flex flex-col items-end flex-shrink-0">
+            <span
+              className="text-[10px] px-2 py-[3px] rounded-full text-white font-medium"
+              style={{ backgroundColor: "#9b7fda" }}
+            >
+              {formatDate(eventDate, locale)}
+            </span>
+            <span className="text-[11px] mt-1" style={{ color: "#5e7983" }}>
+              {eventTime}
+            </span>
+          </div>
+          {alert.event.appCreated && onEdit && (
+            <button
+              onClick={() => onEdit(alert.event)}
+              aria-label={language === "ko" ? "일정 수정" : "Edit event"}
+              className="w-8 h-8 -mr-1 flex items-center justify-center rounded-full text-black/45 hover:text-black hover:bg-white/60 transition-colors flex-shrink-0"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        {alert.event.location && (
+          <p className="text-[11px] mt-1 truncate" style={{ color: "#5e7983" }}>
+            📍 {alert.event.location}
+          </p>
+        )}
+      </div>
+
+      {/* Full person cards for each matched person */}
+      {alert.matchedPeople.map((person) => {
+        const mainInfo = person.attributes.filter((a) => !isInterest(a.key));
+        const lastMeeting = person.meetings[0] ?? null;
+        return (
+          <Link
+            key={person.id}
+            href={`/people/${person.id}`}
+            className="block mt-2 p-3 transition-opacity active:opacity-80"
+            style={{
+              borderRadius: "8px 2px 8px 2px",
+              background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
+            }}
+          >
+            {/* Avatar + name */}
+            <div className="flex items-center gap-2 mb-2">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] text-white font-medium flex-shrink-0"
+                style={{ background: "linear-gradient(135deg, #9b7fda, #5e7983)" }}
+              >
+                {person.name.charAt(0).toUpperCase()}
+              </div>
+              <span
+                className="text-[18px] text-black leading-tight"
+                style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+              >
+                {person.name}
+              </span>
+            </div>
+
+            {/* Attribute chips */}
+            {mainInfo.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {mainInfo.slice(0, 4).map((attr) => (
+                  <span
+                    key={attr.id}
+                    className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
+                    style={{ backgroundColor: "#dccaff" }}
+                  >
+                    {localizeKey(attr.key, language)}: {attr.value}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Last meeting summary — auto-translated to the
+                current app language by RecapLine. */}
+            {lastMeeting?.summary && (
+              <RecapLine
+                summary={lastMeeting.summary}
+                className="text-[11px] mt-2 line-clamp-2"
+                style={{ color: "#5e7983" }}
+              />
+            )}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── CalendarView ─────────────────────────────────────────────
 export function CalendarView() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const { timezone } = useTimezone();
   const locale = getLanguage(language).locale;
   const ko = language === "ko";
@@ -222,6 +359,14 @@ export function CalendarView() {
   const [selectedDate, setSelectedDate] = useState<string | null>(todayKey);
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
 
+  // Add/edit-event dialog. editingEvent null = create on the selected date.
+  const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const openEditEvent = (event: CalendarEvent) => {
+    setEditingEvent(event);
+    setEventDialogOpen(true);
+  };
+
   // Device (phone) calendar — native only. Reads on-device events and matches
   // them to people FULLY ON-DEVICE (offline-safe), independent of Google.
   const {
@@ -244,32 +389,40 @@ export function CalendarView() {
     };
   }, []);
 
-  // When online + connected, refresh from Google, then re-cache normalized.
+  // Refresh from Google, then re-cache normalized. ?days=62 so events created
+  // anywhere on the visible month (and the next) show as dots/cards — the home
+  // alert keeps its 7-day default. Callable so the add/edit dialog can refetch
+  // right after a write (write → refetch → re-cache → close).
+  const refreshEvents = useCallback(async () => {
+    try {
+      const r = await fetch("/api/calendar/events?days=62");
+      const { data } = await r.json();
+      if (!Array.isArray(data)) return;
+      const alerts = data as UpcomingAlertType[];
+      const normalized: CachedCalendar = {
+        events: alerts.map((a) => ({
+          event: a.event,
+          matchedPersonIds: a.matchedPeople.map((p) => p.id),
+        })),
+        syncedAt: Date.now(),
+      };
+      setCachedCalendar(normalized);
+      void cacheCalendarEvents(normalized);
+    } catch {
+      /* offline / transient — the cached copy keeps rendering */
+    }
+  }, []);
+
+  // When online + connected, refresh on mount. (No people gate: app-created
+  // "Just me" events display even before any person is saved.)
   useEffect(() => {
-    if (!online || !hasCalendarConnection || !hasPeople) return;
-    let active = true;
-    fetch("/api/calendar/events")
-      .then((r) => r.json())
-      .then(({ data }) => {
-        if (!active || !Array.isArray(data)) return;
-        const alerts = data as UpcomingAlertType[];
-        const normalized: CachedCalendar = {
-          events: alerts.map((a) => ({
-            event: a.event,
-            matchedPersonIds: a.matchedPeople.map((p) => p.id),
-          })),
-          syncedAt: Date.now(),
-        };
-        setCachedCalendar(normalized);
-        void cacheCalendarEvents(normalized);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [online, hasCalendarConnection, hasPeople]);
+    if (!online || !hasCalendarConnection) return;
+    void refreshEvents();
+  }, [online, hasCalendarConnection, refreshEvents]);
 
   // Hydrate the cached normalized events into full alerts using current people.
+  // Zero-match events stay hidden (their person was deleted) — EXCEPT events
+  // created from this app, which must show even with no person ("Just me").
   const googleAlerts = useMemo<UpcomingAlertType[]>(() => {
     if (!cachedCalendar) return [];
     const byId = new Map(people.map((p) => [p.id, p]));
@@ -280,7 +433,7 @@ export function CalendarView() {
           .map((id) => byId.get(id))
           .filter((p): p is PersonFull => !!p),
       }))
-      .filter((a) => a.matchedPeople.length > 0);
+      .filter((a) => a.matchedPeople.length > 0 || a.event.appCreated);
   }, [cachedCalendar, people]);
 
   const calendarSyncedAt = cachedCalendar?.syncedAt ?? null;
@@ -536,105 +689,21 @@ export function CalendarView() {
             </p>
           )}
 
-          {upcomingExpanded && upcomingAlerts.map((alert) => {
-            const eventDate = dateKeyInZone(alert.event.start, timezone);
-            const eventTime = formatTimeInZone(alert.event.start, timezone, locale);
-
-            return (
-              <div
-                key={alert.event.id}
-                className="p-4"
-                style={{
-                  borderRadius: "10px 2px 10px 2px",
-                  background: "linear-gradient(52deg, #eef7ff 0%, #ede8ff 100%)",
-                  border: "1.5px solid #dccaff",
-                }}
-              >
-                {/* Event title + time */}
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <p
-                    className="text-[16px] text-black leading-tight"
-                    style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-                  >
-                    {alert.event.summary}
-                  </p>
-                  <div className="flex flex-col items-end flex-shrink-0">
-                    <span
-                      className="text-[10px] px-2 py-[3px] rounded-full text-white font-medium"
-                      style={{ backgroundColor: "#9b7fda" }}
-                    >
-                      {formatDate(eventDate, locale)}
-                    </span>
-                    <span className="text-[11px] mt-1" style={{ color: "#5e7983" }}>
-                      {eventTime}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Full person cards for each matched person */}
-                {alert.matchedPeople.map((person) => {
-                  const mainInfo = person.attributes.filter((a) => !isInterest(a.key));
-                  const lastMeeting = person.meetings[0] ?? null;
-                  return (
-                    <Link
-                      key={person.id}
-                      href={`/people/${person.id}`}
-                      className="block mt-2 p-3 transition-opacity active:opacity-80"
-                      style={{
-                        borderRadius: "8px 2px 8px 2px",
-                        background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
-                      }}
-                    >
-                      {/* Avatar + name */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] text-white font-medium flex-shrink-0"
-                          style={{ background: "linear-gradient(135deg, #9b7fda, #5e7983)" }}
-                        >
-                          {person.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span
-                          className="text-[18px] text-black leading-tight"
-                          style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-                        >
-                          {person.name}
-                        </span>
-                      </div>
-
-                      {/* Attribute chips */}
-                      {mainInfo.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {mainInfo.slice(0, 4).map((attr) => (
-                            <span
-                              key={attr.id}
-                              className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
-                              style={{ backgroundColor: "#dccaff" }}
-                            >
-                              {localizeKey(attr.key, language)}: {attr.value}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Last meeting summary — auto-translated to the
-                          current app language by RecapLine. */}
-                      {lastMeeting?.summary && (
-                        <RecapLine
-                          summary={lastMeeting.summary}
-                          className="text-[11px] mt-2 line-clamp-2"
-                          style={{ color: "#5e7983" }}
-                        />
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            );
-          })}
+          {upcomingExpanded && upcomingAlerts.map((alert) => (
+            <UpcomingEventCard
+              key={alert.event.id}
+              alert={alert}
+              language={language}
+              locale={locale}
+              timezone={timezone}
+              allDayLabel={t("calendar.all_day")}
+              onEdit={openEditEvent}
+            />
+          ))}
         </div>
       )}
 
-      {/* ── Selected date: past meetings ── */}
+      {/* ── Selected date: add button + upcoming events + past meetings ── */}
       {selectedDate && (
         <div>
           {/* Date label */}
@@ -649,6 +718,44 @@ export function CalendarView() {
               {formatRelativeDate(selectedDate, locale)}
             </span>
           </div>
+
+          {/* Add a meeting on this date (today/future only; needs network) */}
+          {selectedDate >= todayKey && (
+            <button
+              onClick={() => {
+                setEditingEvent(null);
+                setEventDialogOpen(true);
+              }}
+              disabled={!online}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 mb-3 text-[13px] transition-opacity active:opacity-80 disabled:opacity-50"
+              style={{
+                borderRadius: "10px 2px 10px 2px",
+                border: "1.5px dashed #b9a8e6",
+                color: online ? "#482d7c" : "#9aa7b0",
+                backgroundColor: "rgba(220,202,255,0.12)",
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              {t("calendar.add_meeting")}
+            </button>
+          )}
+
+          {/* Upcoming events on this day (created ones get the edit pencil) */}
+          {selectedUpcoming.length > 0 && (
+            <div className="space-y-3 mb-3">
+              {selectedUpcoming.map((alert) => (
+                <UpcomingEventCard
+                  key={alert.event.id}
+                  alert={alert}
+                  language={language}
+                  locale={locale}
+                  timezone={timezone}
+                  allDayLabel={t("calendar.all_day")}
+                  onEdit={openEditEvent}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Past meetings on this day */}
           {selectedGroup && (
@@ -700,7 +807,7 @@ export function CalendarView() {
           )}
 
           {/* Nothing on this day */}
-          {!selectedGroup && (
+          {!selectedGroup && selectedUpcoming.length === 0 && (
             <p
               className="text-center text-[13px] py-8"
               style={{ color: "#5e7983" }}
@@ -710,6 +817,18 @@ export function CalendarView() {
           )}
         </div>
       )}
+
+      {/* ── Add / edit event dialog ── */}
+      <AddCalendarEventDialog
+        open={eventDialogOpen}
+        onOpenChange={setEventDialogOpen}
+        dateKey={selectedDate ?? todayKey}
+        people={people}
+        editing={editingEvent}
+        hasConnection={hasCalendarConnection}
+        onSaved={refreshEvents}
+      />
+
 
       {/* ── Empty state (no people at all) ── */}
       {!hasPeople && (

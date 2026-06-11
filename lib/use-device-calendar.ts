@@ -46,6 +46,7 @@ function mapEvent(ev: PluginEvent): CalendarEvent {
     id: ev.id,
     summary: ev.title || "(No title)",
     description: ev.description ?? null,
+    location: null, // the device plugin payload we read has no location
     start: new Date(startMs).toISOString(),
     end: new Date(endMs).toISOString(),
     attendees: (ev.attendees ?? []).map((a) => ({
