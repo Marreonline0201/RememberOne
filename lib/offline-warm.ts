@@ -87,3 +87,10 @@ export async function warmPaths(paths: string[], concurrency = 2): Promise<void>
     emit();
   }
 }
+
+// Re-run warming over the already-known targets (e.g. on app resume / warm start).
+// Dedup means only still-unwarmed paths are fetched, so a fully-warm cache is a
+// no-op — this finishes any incomplete coverage without re-fetching everything.
+export function revalidateWarm(): void {
+  if (targets.size > 0) void warmPaths([...targets], 2);
+}

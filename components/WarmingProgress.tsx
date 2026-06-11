@@ -1,25 +1,31 @@
 "use client";
 
-// One-shot offline-readiness indicator shown at the top of the home screen on
-// each app launch, so the user can see whether the app is ready to work offline:
+// Offline-readiness indicator at the top of the home screen. Shows on every app
+// open — COLD start (fresh JS context) AND WARM start (the app returns to the
+// foreground from the background) — so the user knows whether the app is ready to
+// work offline:
 //   - still caching  -> "Preparing offline…" progress bar
 //   - cached / done  -> "✓ Available offline" for ~1s, then it closes
 //
-// Shown once per launch (module flag, reset on cold start = fresh JS context); a
-// tap into a card or a return to home mid-session does not re-trigger it. Driven
-// by subscribeWarmProgress() from lib/offline-warm.
+// It does NOT re-trigger on in-app navigation (home -> person -> home): only a
+// real cold start or a visibilitychange back to "visible" re-arms it.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
-import { subscribeWarmProgress, type WarmProgress } from "@/lib/offline-warm";
+import {
+  subscribeWarmProgress,
+  revalidateWarm,
+  type WarmProgress,
+} from "@/lib/offline-warm";
 import { useOnline } from "@/lib/use-online";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-// Reset on cold start (new JS context) — so the indicator runs once per launch.
-let shownThisSession = false;
+// Reset on cold start (new JS context). Gates the mount-based show to once, so
+// in-app remounts don't re-trigger it; warm-start shows come from visibilitychange.
+let coldStartShown = false;
 
-const READY_MS = 1000; // how long the "✓ Available offline" state stays up
-const SAFETY_MS = 8000; // force-resolve if warming stalls so the bar never sticks
+const READY_MS = 1000; // how long the "✓ Available offline" check stays up
+const SAFETY_MS = 8000; // dismiss if warming stalls so the bar never sticks
 
 type Phase = "preparing" | "ready" | "hidden";
 
@@ -33,22 +39,37 @@ export function WarmingProgress() {
     total: 0,
     active: false,
   });
-  // Only the first home mount per launch runs the indicator; later mounts stay hidden.
   const [phase, setPhase] = useState<Phase>(() =>
-    shownThisSession ? "hidden" : "preparing",
+    coldStartShown ? "hidden" : "preparing",
   );
-
-  // Claim the one-shot slot for this launch.
-  useEffect(() => {
-    if (phase === "preparing") shownThisSession = true;
-  }, [phase]);
-
-  useEffect(() => subscribeWarmProgress(setProgress), []);
 
   const complete = progress.total > 0 && progress.done >= progress.total;
 
-  // preparing -> ready: warming finished, OR opened offline (already cache-backed,
-  // so offline is proven possible).
+  // Let the mount-time visibility listener read current readiness without re-binding.
+  const completeRef = useRef(complete);
+  const onlineRef = useRef(online);
+  completeRef.current = complete;
+  onlineRef.current = online;
+
+  useEffect(() => subscribeWarmProgress(setProgress), []);
+
+  // Cold start already armed via the lazy initializer above. Here we (1) mark the
+  // cold-start show consumed so in-app remounts stay quiet, and (2) re-arm on every
+  // warm start — when the app comes back to the foreground, re-validate the cache
+  // (no-op if fully warm) and show the indicator again, jumping straight to the
+  // check if it's already ready.
+  useEffect(() => {
+    coldStartShown = true;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      revalidateWarm();
+      setPhase(completeRef.current || !onlineRef.current ? "ready" : "preparing");
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  // preparing -> ready: warming finished, or opened offline (already cache-backed).
   useEffect(() => {
     if (phase !== "preparing") return;
     if (complete || !online) setPhase("ready");
@@ -56,8 +77,7 @@ export function WarmingProgress() {
 
   // Safety net: if warming stalls / partly fails, dismiss SILENTLY after a cap —
   // never force the "✓ Available offline" check, since offline may not actually be
-  // ready yet (e.g. a first login with many contacts on a slow link). Honest
-  // progress that quietly disappears beats a green check that lies.
+  // ready yet. Honest progress that quietly disappears beats a green check that lies.
   useEffect(() => {
     if (phase !== "preparing") return;
     const t = setTimeout(() => setPhase("hidden"), SAFETY_MS);
