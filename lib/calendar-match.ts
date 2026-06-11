@@ -26,6 +26,14 @@ export async function matchEventsToPeople(
   for (const event of events) {
     const matchedPeopleIds: string[] = [];
 
+    // App-created events know their person directly (the picker's choice is
+    // tagged on the event) — seed the match so a custom title like "Lunch"
+    // still shows the person's card. Deleted/foreign ids null out in
+    // getPersonFull below, and "me" means no person.
+    if (event.appCreated && event.appPersonId && event.appPersonId !== "me") {
+      matchedPeopleIds.push(event.appPersonId);
+    }
+
     for (const person of people) {
       const nameMatch = eventMentionsPerson(
         event.summary,
@@ -42,11 +50,14 @@ export async function matchEventsToPeople(
       }
     }
 
+    // Dedupe — the tag seed and the text matcher can both hit the same person.
+    const uniqueIds = [...new Set(matchedPeopleIds)];
+
     // Unmatched events are dropped — EXCEPT events created from this app
     // (e.g. a "Just me" event matches no saved person but must still show).
-    if (matchedPeopleIds.length > 0 || event.appCreated) {
+    if (uniqueIds.length > 0 || event.appCreated) {
       const matchedPeopleFull = await Promise.all(
-        matchedPeopleIds.map((id) => getPersonFull(supabase, id, userId))
+        uniqueIds.map((id) => getPersonFull(supabase, id, userId))
       );
 
       alerts.push({

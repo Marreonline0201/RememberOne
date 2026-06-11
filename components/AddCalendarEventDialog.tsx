@@ -28,8 +28,13 @@ import { useTimezone } from "@/contexts/TimezoneContext";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import { cacheConnectionFlag } from "@/lib/offline-cache";
 import { getLanguage } from "@/lib/i18n";
-import { formatDate, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
+import { addDaysToKey, formatDate, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
 import type { CalendarEvent, PersonFull } from "@/types/app";
+
+// How far ahead the app lets you add/move an event. The calendar fetches a
+// 62-day window (timeMin = now), so anything past it would save fine in
+// Google but silently never show in the app — cap the affordance instead.
+export const MAX_ADD_DAYS_AHEAD = 61;
 
 interface Props {
   open: boolean;
@@ -108,7 +113,19 @@ export function AddCalendarEventDialog({
         setDate(dateKeyInZone(editing.start, timezone));
         setTime(editing.start.includes("T") ? toHHmm(editing.start, timezone) : "");
         setDuration(durationFromEvent(editing));
-        setTitle(editing.summary);
+        // Auto-generated titles must STAY auto: prefill blank when the summary
+        // is exactly the prefilled person's auto title, so switching the person
+        // re-titles the event instead of keeping a stale "Meet {old name}".
+        const prefillPerson =
+          editing.appPersonId && editing.appPersonId !== "me"
+            ? people.find((p) => p.id === editing.appPersonId) ?? null
+            : null;
+        const prefillAuto = prefillPerson
+          ? ko
+            ? `${prefillPerson.name} 만나기`
+            : `Meet ${prefillPerson.name}`
+          : t("calendar.personal_plan");
+        setTitle(editing.summary === prefillAuto ? "" : editing.summary);
         setLocation(editing.location ?? "");
         setNote(editing.description ?? "");
       } else {
@@ -128,7 +145,7 @@ export function AddCalendarEventDialog({
       setError(null);
     }
     wasOpen.current = open;
-  }, [open, editing, dateKey, timezone]);
+  }, [open, editing, dateKey, timezone, people, ko, t]);
 
   // After a successful native (re)connect, refresh the cached connection flag
   // directly — its normal writer is the home load, so the calendar page would
@@ -487,6 +504,7 @@ export function AddCalendarEventDialog({
                         type="date"
                         value={date}
                         min={todayKey}
+                        max={addDaysToKey(todayKey, MAX_ADD_DAYS_AHEAD)}
                         onChange={(e) => setDate(e.target.value)}
                         className="flex-1 h-10 px-3 rounded-xl text-[13px] outline-none"
                         style={inputStyle}

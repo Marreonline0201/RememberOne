@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "rea
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { X, WifiOff, Plus, Pencil } from "lucide-react";
-import { formatDate, formatRelativeDate, localizeKey, formatTimeInZone, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
+import { formatDate, formatRelativeDate, localizeKey, formatTimeInZone, dateKeyInZone, todayKeyInZone, addDaysToKey } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { useOnline } from "@/lib/use-online";
@@ -16,7 +16,10 @@ import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import { useDeviceCalendar } from "@/lib/use-device-calendar";
 import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
 import { groupMeetingsByDate } from "@/lib/calendar-group";
-import { AddCalendarEventDialog } from "@/components/AddCalendarEventDialog";
+import {
+  AddCalendarEventDialog,
+  MAX_ADD_DAYS_AHEAD,
+} from "@/components/AddCalendarEventDialog";
 import {
   getCachedPeople,
   getCachedConnectionFlag,
@@ -719,8 +722,11 @@ export function CalendarView() {
             </span>
           </div>
 
-          {/* Add a meeting on this date (today/future only; needs network) */}
-          {selectedDate >= todayKey && (
+          {/* Add a meeting on this date — today through the fetch horizon only
+              (an event past ?days=62 would save to Google but never display
+              here), and it needs the network. */}
+          {selectedDate >= todayKey &&
+            selectedDate <= addDaysToKey(todayKey, MAX_ADD_DAYS_AHEAD) && (
             <button
               onClick={() => {
                 setEditingEvent(null);

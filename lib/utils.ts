@@ -91,6 +91,15 @@ export function todayKeyInZone(timeZone: string): string {
   return dateKeyInZone(new Date().toISOString(), timeZone);
 }
 
+// A YYYY-MM-DD key shifted by N calendar days. Pure date-key arithmetic —
+// parsing as UTC midnight sidesteps any local-zone/DST drift.
+export function addDaysToKey(key: string, days: number): string {
+  const d = new Date(`${key}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return key;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 // Get initials from a name for avatar fallback
 export function getInitials(name: string): string {
   return name
