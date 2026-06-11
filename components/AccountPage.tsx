@@ -12,7 +12,13 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { useOnline } from "@/lib/use-online";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
-import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
+import {
+  useDismissFlag,
+  useLocalFlag,
+  GOOGLE_PROMPT_KEY,
+  DEVICE_PROMPT_KEY,
+  TODAY_FIRST_KEY,
+} from "@/lib/use-dismiss-flag";
 import {
   getCachedProfile,
   getCachedConnectionFlag,
@@ -48,6 +54,11 @@ export function AccountPage() {
     useDismissFlag(GOOGLE_PROMPT_KEY);
   const { dismissed: deviceDismissed, setDismissed: setDeviceDismissed } =
     useDismissFlag(DEVICE_PROMPT_KEY);
+  // Calendar screen order: selected day pinned above "Upcoming" (default ON).
+  const { on: todayFirst, setOn: setTodayFirst } = useLocalFlag(
+    TODAY_FIRST_KEY,
+    true
+  );
   const [calOpen, setCalOpen] = useState(false);
   const [isNative, setIsNative] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -457,6 +468,33 @@ export function AccountPage() {
                 </button>
               </div>
             )}
+
+            {/* Calendar order: selected day above Upcoming (works without
+                Google too — past meetings reorder the same way) */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium" style={{ color: "#284e72" }}>
+                  {t("calendar.today_first")}
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: "#5e7983" }}>
+                  {t("calendar.today_first_hint")}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={todayFirst}
+                aria-label={t("calendar.today_first")}
+                onClick={() => setTodayFirst(!todayFirst)}
+                className="relative shrink-0 w-11 h-6 rounded-full transition-colors"
+                style={{ backgroundColor: todayFirst ? "#284e72" : "#cdbce8" }}
+              >
+                <span
+                  className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                  style={{ transform: todayFirst ? "translateX(20px)" : "translateX(0)" }}
+                />
+              </button>
+            </div>
           </div>
         )}
       </div>

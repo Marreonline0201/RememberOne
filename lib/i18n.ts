@@ -190,6 +190,11 @@ const keys: Translations = {
     en: "Reappears on the calendar screen when your phone calendar isn't linked.",
     ko: "휴대폰 캘린더가 연결되지 않았을 때 캘린더 화면에 다시 표시됩니다.",
   },
+  "calendar.today_first": { en: "Today's meetings first", ko: "오늘 만남 먼저 보기" },
+  "calendar.today_first_hint": {
+    en: "Show the selected day right below the calendar, above Upcoming.",
+    ko: "선택한 날짜를 캘린더 바로 아래, 예정된 만남 위에 표시합니다.",
+  },
   // Calendar — add/edit meeting dialog
   "calendar.add_meeting": { en: "Add meeting", ko: "만남 추가" },
   "calendar.edit_meeting": { en: "Edit meeting", ko: "만남 수정" },

@@ -14,7 +14,13 @@ import { getLanguage } from "@/lib/i18n";
 import { RecapLine } from "@/components/RecapLine";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import { useDeviceCalendar } from "@/lib/use-device-calendar";
-import { useDismissFlag, GOOGLE_PROMPT_KEY, DEVICE_PROMPT_KEY } from "@/lib/use-dismiss-flag";
+import {
+  useDismissFlag,
+  useLocalFlag,
+  GOOGLE_PROMPT_KEY,
+  DEVICE_PROMPT_KEY,
+  TODAY_FIRST_KEY,
+} from "@/lib/use-dismiss-flag";
 import { groupMeetingsByDate } from "@/lib/calendar-group";
 import {
   AddCalendarEventDialog,
@@ -352,6 +358,11 @@ export function CalendarView() {
   const { dismissed: deviceDismissed, setDismissed: dismissDevice } =
     useDismissFlag(DEVICE_PROMPT_KEY);
 
+  // Settings preference: selected day (default today) pinned directly below
+  // the grid, above "Upcoming Meetings". Default ON; pre-hydration renders the
+  // default order, so only opt-outs can see a one-frame flip.
+  const { on: todayFirst } = useLocalFlag(TODAY_FIRST_KEY, true);
+
   const today = new Date();
   // "Today" highlight uses the user's chosen timezone, not the device/server zone.
   const todayKey = todayKeyInZone(timezone);
@@ -485,6 +496,16 @@ export function CalendarView() {
     upcomingByDate.get(dateKey)!.push(alert);
   }
 
+  // When the selected day is pinned on top, its events already show there —
+  // drop them from the "Upcoming Meetings" list so the same cards don't render
+  // twice in one viewport.
+  const listAlerts = useMemo(() => {
+    if (!todayFirst || !selectedDate) return upcomingAlerts;
+    return upcomingAlerts.filter(
+      (a) => dateKeyInZone(a.event.start, timezone) !== selectedDate
+    );
+  }, [upcomingAlerts, todayFirst, selectedDate, timezone]);
+
   // Calendar grid math
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -507,6 +528,175 @@ export function CalendarView() {
   // Data for the selected date
   const selectedGroup = selectedDate ? groups.find((g) => g.dateKey === selectedDate) ?? null : null;
   const selectedUpcoming = selectedDate ? (upcomingByDate.get(selectedDate) ?? []) : [];
+
+  // ── Section blocks — order set by the "today first" Settings preference ──
+  // ON (default): selected day directly below the grid, above Upcoming.
+  // OFF: legacy order (Upcoming first). The offline "last updated" note
+  // renders once, in whichever Google-backed section comes first.
+  const upcomingSection = listAlerts.length > 0 && (
+    <div className="space-y-3">
+      <button
+        onClick={() => setUpcomingExpanded((v) => !v)}
+        className="flex items-center gap-2 px-1 w-full"
+      >
+        <p
+          className="text-[12px] uppercase"
+          style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#9b7fda" }}
+        >
+          {ko ? "예정된 만남" : "Upcoming Meetings"}
+        </p>
+        <span className="text-[12px] ml-auto transition-transform" style={{ color: "#9b7fda", display: "inline-block", transform: upcomingExpanded ? "rotate(0deg)" : "rotate(-90deg)" }}>
+          ▾
+        </span>
+      </button>
+
+      {!online && calendarSyncedAt && (!todayFirst || !selectedDate) && (
+        <p className="flex items-center gap-1.5 px-1 -mt-1 text-[10px]" style={{ color: "#9b8ec9" }}>
+          <WifiOff className="w-3 h-3 shrink-0" />
+          {ko ? "마지막 동기화: " : "Last updated "}
+          {formatRelativeDate(new Date(calendarSyncedAt).toISOString(), locale)}
+        </p>
+      )}
+
+      {upcomingExpanded && listAlerts.map((alert) => (
+        <UpcomingEventCard
+          key={alert.event.id}
+          alert={alert}
+          language={language}
+          locale={locale}
+          timezone={timezone}
+          allDayLabel={t("calendar.all_day")}
+          onEdit={openEditEvent}
+        />
+      ))}
+    </div>
+  );
+
+  const selectedDaySection = selectedDate && (
+    <div>
+      {/* Date label */}
+      <div className="flex items-baseline gap-2 mb-3 px-1">
+        <span
+          className="text-[14px] text-black uppercase"
+          style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+        >
+          {formatDate(selectedDate, locale)}
+        </span>
+        <span className="text-[11px]" style={{ color: "#5e7983" }}>
+          {formatRelativeDate(selectedDate, locale)}
+        </span>
+      </div>
+
+      {/* Staleness note travels with the FIRST Google-backed section */}
+      {todayFirst && !online && calendarSyncedAt && (
+        <p className="flex items-center gap-1.5 px-1 -mt-2 mb-3 text-[10px]" style={{ color: "#9b8ec9" }}>
+          <WifiOff className="w-3 h-3 shrink-0" />
+          {ko ? "마지막 동기화: " : "Last updated "}
+          {formatRelativeDate(new Date(calendarSyncedAt).toISOString(), locale)}
+        </p>
+      )}
+
+      {/* Add a meeting on this date — today through the fetch horizon only
+          (an event past ?days=62 would save to Google but never display
+          here), and it needs the network. */}
+      {selectedDate >= todayKey &&
+        selectedDate <= addDaysToKey(todayKey, MAX_ADD_DAYS_AHEAD) && (
+        <button
+          onClick={() => {
+            setEditingEvent(null);
+            setEventDialogOpen(true);
+          }}
+          disabled={!online}
+          className="w-full flex items-center justify-center gap-1.5 py-2.5 mb-3 text-[13px] transition-opacity active:opacity-80 disabled:opacity-50"
+          style={{
+            borderRadius: "10px 2px 10px 2px",
+            border: "1.5px dashed #b9a8e6",
+            color: online ? "#482d7c" : "#9aa7b0",
+            backgroundColor: "rgba(220,202,255,0.12)",
+          }}
+        >
+          <Plus className="w-4 h-4" />
+          {t("calendar.add_meeting")}
+        </button>
+      )}
+
+      {/* Upcoming events on this day (created ones get the edit pencil) */}
+      {selectedUpcoming.length > 0 && (
+        <div className="space-y-3 mb-3">
+          {selectedUpcoming.map((alert) => (
+            <UpcomingEventCard
+              key={alert.event.id}
+              alert={alert}
+              language={language}
+              locale={locale}
+              timezone={timezone}
+              allDayLabel={t("calendar.all_day")}
+              onEdit={openEditEvent}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Past meetings on this day */}
+      {selectedGroup && (
+        <div className="space-y-3">
+          {selectedGroup.entries.map(({ person, meetingId, summary }) => {
+            const mainInfo = person.attributes.filter((a) => !isInterest(a.key));
+            return (
+              <Link
+                key={meetingId}
+                href={`/people/${person.id}`}
+                className="block p-4 transition-opacity active:opacity-90"
+                style={{
+                  borderRadius: "10px 2px 10px 2px",
+                  background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
+                }}
+              >
+                <h3
+                  className="text-[22px] leading-tight text-black"
+                  style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+                >
+                  {person.name}
+                </h3>
+
+                {mainInfo.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {mainInfo.slice(0, 4).map((attr) => (
+                      <span
+                        key={attr.id}
+                        className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
+                        style={{ backgroundColor: "#dccaff" }}
+                      >
+                        {localizeKey(attr.key, language)}: {attr.value}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {summary && (
+                  <RecapLine
+                    summary={summary}
+                    className="text-[11px] mt-2 line-clamp-2"
+                    style={{ color: "#5e7983" }}
+                  />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Nothing on this day */}
+      {!selectedGroup && selectedUpcoming.length === 0 && (
+        <p
+          className="text-center text-[13px] py-8"
+          style={{ color: "#5e7983" }}
+        >
+          {ko ? "이 날 기록된 만남이 없어요" : "No meetings on this day"}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-5">
@@ -666,162 +856,17 @@ export function CalendarView() {
         </p>
       )}
 
-      {/* ── Upcoming meetings (always shown right below calendar) ── */}
-      {upcomingAlerts.length > 0 && (
-        <div className="space-y-3">
-          <button
-            onClick={() => setUpcomingExpanded((v) => !v)}
-            className="flex items-center gap-2 px-1 w-full"
-          >
-            <p
-              className="text-[12px] uppercase"
-              style={{ fontFamily: "'Hammersmith One', sans-serif", color: "#9b7fda" }}
-            >
-              {ko ? "예정된 만남" : "Upcoming Meetings"}
-            </p>
-            <span className="text-[12px] ml-auto transition-transform" style={{ color: "#9b7fda", display: "inline-block", transform: upcomingExpanded ? "rotate(0deg)" : "rotate(-90deg)" }}>
-              ▾
-            </span>
-          </button>
-
-          {!online && calendarSyncedAt && (
-            <p className="flex items-center gap-1.5 px-1 -mt-1 text-[10px]" style={{ color: "#9b8ec9" }}>
-              <WifiOff className="w-3 h-3 shrink-0" />
-              {ko ? "마지막 동기화: " : "Last updated "}
-              {formatRelativeDate(new Date(calendarSyncedAt).toISOString(), locale)}
-            </p>
-          )}
-
-          {upcomingExpanded && upcomingAlerts.map((alert) => (
-            <UpcomingEventCard
-              key={alert.event.id}
-              alert={alert}
-              language={language}
-              locale={locale}
-              timezone={timezone}
-              allDayLabel={t("calendar.all_day")}
-              onEdit={openEditEvent}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ── Selected date: add button + upcoming events + past meetings ── */}
-      {selectedDate && (
-        <div>
-          {/* Date label */}
-          <div className="flex items-baseline gap-2 mb-3 px-1">
-            <span
-              className="text-[14px] text-black uppercase"
-              style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-            >
-              {formatDate(selectedDate, locale)}
-            </span>
-            <span className="text-[11px]" style={{ color: "#5e7983" }}>
-              {formatRelativeDate(selectedDate, locale)}
-            </span>
-          </div>
-
-          {/* Add a meeting on this date — today through the fetch horizon only
-              (an event past ?days=62 would save to Google but never display
-              here), and it needs the network. */}
-          {selectedDate >= todayKey &&
-            selectedDate <= addDaysToKey(todayKey, MAX_ADD_DAYS_AHEAD) && (
-            <button
-              onClick={() => {
-                setEditingEvent(null);
-                setEventDialogOpen(true);
-              }}
-              disabled={!online}
-              className="w-full flex items-center justify-center gap-1.5 py-2.5 mb-3 text-[13px] transition-opacity active:opacity-80 disabled:opacity-50"
-              style={{
-                borderRadius: "10px 2px 10px 2px",
-                border: "1.5px dashed #b9a8e6",
-                color: online ? "#482d7c" : "#9aa7b0",
-                backgroundColor: "rgba(220,202,255,0.12)",
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              {t("calendar.add_meeting")}
-            </button>
-          )}
-
-          {/* Upcoming events on this day (created ones get the edit pencil) */}
-          {selectedUpcoming.length > 0 && (
-            <div className="space-y-3 mb-3">
-              {selectedUpcoming.map((alert) => (
-                <UpcomingEventCard
-                  key={alert.event.id}
-                  alert={alert}
-                  language={language}
-                  locale={locale}
-                  timezone={timezone}
-                  allDayLabel={t("calendar.all_day")}
-                  onEdit={openEditEvent}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Past meetings on this day */}
-          {selectedGroup && (
-            <div className="space-y-3">
-              {selectedGroup.entries.map(({ person, meetingId, summary }) => {
-                const mainInfo = person.attributes.filter((a) => !isInterest(a.key));
-                return (
-                  <Link
-                    key={meetingId}
-                    href={`/people/${person.id}`}
-                    className="block p-4 transition-opacity active:opacity-90"
-                    style={{
-                      borderRadius: "10px 2px 10px 2px",
-                      background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
-                    }}
-                  >
-                    <h3
-                      className="text-[22px] leading-tight text-black"
-                      style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-                    >
-                      {person.name}
-                    </h3>
-
-                    {mainInfo.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {mainInfo.slice(0, 4).map((attr) => (
-                          <span
-                            key={attr.id}
-                            className="text-[10px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
-                            style={{ backgroundColor: "#dccaff" }}
-                          >
-                            {localizeKey(attr.key, language)}: {attr.value}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {summary && (
-                      <RecapLine
-                        summary={summary}
-                        className="text-[11px] mt-2 line-clamp-2"
-                        style={{ color: "#5e7983" }}
-                      />
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Nothing on this day */}
-          {!selectedGroup && selectedUpcoming.length === 0 && (
-            <p
-              className="text-center text-[13px] py-8"
-              style={{ color: "#5e7983" }}
-            >
-              {ko ? "이 날 기록된 만남이 없어요" : "No meetings on this day"}
-            </p>
-          )}
-        </div>
+      {/* ── Selected day & Upcoming — order per the Settings preference ── */}
+      {todayFirst ? (
+        <>
+          {selectedDaySection}
+          {upcomingSection}
+        </>
+      ) : (
+        <>
+          {upcomingSection}
+          {selectedDaySection}
+        </>
       )}
 
       {/* ── Add / edit event dialog ── */}
