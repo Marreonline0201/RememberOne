@@ -7,23 +7,32 @@
 // lib/device-calendar.ts.
 //
 // Native only. The device calendar can only be reached by native code, so this
-// hook is a no-op ("unavailable") on web/desktop. It also guards on
-// isPluginAvailable so the instantly-deployed web bundle never crashes on app
+// hook is a no-op ("unavailable") on web/desktop. It also guards on plugin
+// availability so the instantly-deployed web bundle never crashes on app
 // installs that predate the native plugin (they just stay "unavailable").
 //
 // Flow: requestReadOnlyCalendarAccess (Android) / requestFullCalendarAccess
 // (iOS — no read-only tier on iOS 17) → listEventsInRange (62 days, matching
 // the Google window + the add-event horizon) → match to cached people
-// on-device (offline-safe, no server round-trip) → alerts.
+// on-device (offline-safe, no server round-trip) → alerts. App-created device
+// events are force-included via the local tag registry (offline-cache), since
+// a "Just me"/custom-titled event matches no saved person by name.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCachedPeople } from "@/lib/offline-cache";
+import {
+  getCachedPeople,
+  getCachedDeviceEventTags,
+  cacheDeviceEventTags,
+} from "@/lib/offline-cache";
 import { matchEventsToPeopleClient } from "@/lib/calendar-match-client";
-import { checkDeviceWriteAccess } from "@/lib/device-calendar";
-import type { CalendarEvent, UpcomingMeetingAlert } from "@/types/app";
+import { isDeviceCalendarAvailable } from "@/lib/device-calendar";
+import type {
+  CalendarEvent,
+  PersonFull,
+  UpcomingMeetingAlert,
+} from "@/types/app";
 
 const DAYS_AHEAD = 62; // mirror the Google window (lib/google-calendar.ts)
-const PLUGIN_NAME = "CapacitorCalendar";
 
 export type DeviceCalendarStatus =
   | "idle"
@@ -74,13 +83,50 @@ function mapEvent(ev: PluginEvent): CalendarEvent {
   };
 }
 
+// Name-matched alerts + force-included app-created (tagged) events, with the
+// tagged person resolved exactly and put first. Prunes registry entries whose
+// event no longer exists in the read window (deleted on the phone / long past).
+function buildAlerts(
+  events: CalendarEvent[],
+  people: PersonFull[],
+  tags: Record<string, string>
+): UpcomingMeetingAlert[] {
+  const matched = new Map(
+    matchEventsToPeopleClient(events, people).map((a) => [a.event.id, a])
+  );
+  const alerts: UpcomingMeetingAlert[] = [];
+  for (const event of events) {
+    const tag = tags[event.id];
+    const nameMatch = matched.get(event.id);
+    if (tag) {
+      const person =
+        tag !== "me" ? people.find((p) => p.id === tag) ?? null : null;
+      const matchedPeople = nameMatch ? [...nameMatch.matchedPeople] : [];
+      if (person) {
+        const at = matchedPeople.findIndex((p) => p.id === person.id);
+        if (at > 0) matchedPeople.splice(at, 1);
+        if (at !== 0) matchedPeople.unshift(person);
+      }
+      alerts.push({
+        event: { ...event, appCreated: true, appPersonId: tag },
+        matchedPeople,
+      });
+    } else if (nameMatch) {
+      alerts.push(nameMatch);
+    }
+  }
+  return alerts;
+}
+
 export function useDeviceCalendar(enabled: boolean = true) {
   const [alerts, setAlerts] = useState<UpcomingMeetingAlert[]>([]);
   const [status, setStatus] = useState<DeviceCalendarStatus>("idle");
-  // Write permission state (render-time gating only; the save path re-checks
-  // and requests via ensureDeviceWriteAccess).
-  const [writable, setWritable] = useState(false);
+  // Native + plugin present (independent of permissions) — whether the
+  // phone-calendar write path can even be attempted.
+  const [available, setAvailable] = useState(false);
   const busyRef = useRef(false);
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   const readAndMatch = useCallback(async () => {
     setStatus("loading");
@@ -93,18 +139,23 @@ export function useDeviceCalendar(enabled: boolean = true) {
       const events: CalendarEvent[] = (result ?? []).map((e) =>
         mapEvent(e as unknown as PluginEvent)
       );
-
-      if (events.length === 0) {
-        setAlerts([]);
-        setStatus("granted");
-        return;
-      }
+      const tags = (await getCachedDeviceEventTags()) ?? {};
 
       // Match on-device against the cached people — works fully offline, no
       // server round-trip (mirrors the server matcher via eventMentionsPerson).
       const people = await getCachedPeople();
-      setAlerts(matchEventsToPeopleClient(events, people));
+      setAlerts(buildAlerts(events, people, tags));
       setStatus("granted");
+
+      // Prune tags for events that no longer exist in the window (only after
+      // a SUCCESSFUL read — a failed read must never wipe the registry).
+      const liveIds = new Set(events.map((e) => e.id));
+      const pruned = Object.fromEntries(
+        Object.entries(tags).filter(([id]) => liveIds.has(id))
+      );
+      if (Object.keys(pruned).length !== Object.keys(tags).length) {
+        void cacheDeviceEventTags(pruned);
+      }
     } catch (err) {
       // Permission was granted; reading/matching just failed. Don't nag the
       // user with the prompt again — fail quietly (Google path still works).
@@ -114,20 +165,21 @@ export function useDeviceCalendar(enabled: boolean = true) {
   }, []);
 
   // Initial probe: native? plugin present? already granted? → read silently.
+  // Availability is probed even when `enabled` is false (no saved people yet)
+  // so the WRITE path stays offered — a "Just me" event needs no people.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!enabled) {
-        if (!cancelled) setStatus("idle");
-        return;
-      }
       try {
-        const { Capacitor } = await import("@capacitor/core");
-        if (
-          !Capacitor.isNativePlatform() ||
-          !Capacitor.isPluginAvailable(PLUGIN_NAME)
-        ) {
-          if (!cancelled) setStatus("unavailable");
+        const avail = await isDeviceCalendarAvailable();
+        if (cancelled) return;
+        setAvailable(avail);
+        if (!avail) {
+          setStatus("unavailable");
+          return;
+        }
+        if (!enabled) {
+          setStatus("idle");
           return;
         }
         const { CapacitorCalendar, CalendarPermissionScope } = await import(
@@ -137,11 +189,6 @@ export function useDeviceCalendar(enabled: boolean = true) {
           scope: CalendarPermissionScope.READ_CALENDAR,
         });
         if (cancelled) return;
-        // Non-prompting write check (auto-denied on builds without
-        // WRITE_CALENDAR in the manifest — that's the graceful fallback).
-        void checkDeviceWriteAccess().then((w) => {
-          if (!cancelled) setWritable(w);
-        });
         if (result === "granted") {
           await readAndMatch();
         } else {
@@ -190,13 +237,24 @@ export function useDeviceCalendar(enabled: boolean = true) {
 
   // Re-read after a device write so the new/changed event shows immediately.
   const refresh = useCallback(async () => {
-    if (status !== "granted") return;
+    if (statusRef.current !== "granted") return;
     await readAndMatch();
-  }, [status, readAndMatch]);
+  }, [readAndMatch]);
 
-  // The save path requests write access itself; let it report a fresh grant
-  // back so render-time gating updates without a remount.
-  const markWritable = useCallback((w: boolean) => setWritable(w), []);
+  // Called after the save path obtained WRITE access. If READ wasn't granted
+  // yet (prompt dismissed / never shown), pick it up now — Android grants it
+  // without another dialog since READ/WRITE_CALENDAR share a permission group
+  // — and read immediately so the just-saved event actually appears.
+  const onWriteGranted = useCallback(async () => {
+    if (statusRef.current === "granted") return;
+    try {
+      const { CapacitorCalendar } = await import("@ebarooni/capacitor-calendar");
+      const { result } = await CapacitorCalendar.requestReadOnlyCalendarAccess();
+      if (result === "granted") await readAndMatch();
+    } catch {
+      /* read promotion is best-effort */
+    }
+  }, [readAndMatch]);
 
-  return { alerts, status, connect, writable, markWritable, refresh };
+  return { alerts, status, available, connect, refresh, onWriteGranted };
 }

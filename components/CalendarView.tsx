@@ -391,19 +391,16 @@ export function CalendarView() {
   // Device (phone) calendar — native only. Reads on-device events and matches
   // them to people FULLY ON-DEVICE (offline-safe), independent of Google. With
   // write access (builds declaring WRITE_CALENDAR) it's also the app's primary
-  // write target — no Google connection needed on the phone.
+  // write target — no Google connection needed on the phone. Always enabled
+  // here: the write path matters even with zero saved people ("Just me").
   const {
     alerts: deviceAlerts,
     status: deviceStatus,
+    available: deviceAvailable,
     connect: connectDevice,
-    markWritable: markDeviceWritable,
     refresh: refreshDeviceEvents,
-  } = useDeviceCalendar(hasPeople);
-
-  // Native + plugin present (any permission state) — the device write path can
-  // be attempted (the save flow requests permission itself).
-  const deviceAvailable =
-    deviceStatus !== "unavailable" && deviceStatus !== "idle";
+    onWriteGranted: onDeviceWriteGranted,
+  } = useDeviceCalendar();
 
   // Cached Google calendar, stored NORMALIZED (matched person IDs) and hydrated
   // against the current people store at render time — so it shows offline (the
@@ -912,7 +909,7 @@ export function CalendarView() {
         editingPersonId={editingPersonId}
         hasConnection={hasCalendarConnection}
         deviceAvailable={deviceAvailable}
-        onDeviceGranted={() => markDeviceWritable(true)}
+        onDeviceGranted={onDeviceWriteGranted}
         onSaved={handleSaved}
       />
 

@@ -10,6 +10,11 @@
 // must treat a `false` from ensureDeviceWriteAccess() as "fall back to the
 // Google path", never as an error.
 
+import {
+  getCachedDeviceEventTags,
+  cacheDeviceEventTags,
+} from "@/lib/offline-cache";
+
 const PLUGIN_NAME = "CapacitorCalendar";
 
 export interface DeviceEventInput {
@@ -18,8 +23,25 @@ export interface DeviceEventInput {
   durationMin: number;
   timeZone: string; // IANA zone the wall clock is expressed in
   title: string;
+  personId: string; // picked person's id, or "me"
   location: string | null;
   note: string | null;
+}
+
+// The device calendar can't carry a private app tag, so app-created device
+// events are tracked in a local registry (offline-cache) — that's what keeps
+// a "Just me"/custom-titled event visible and the person link exact.
+async function tagDeviceEvent(id: string, personId: string): Promise<void> {
+  const tags = (await getCachedDeviceEventTags()) ?? {};
+  tags[id] = personId;
+  await cacheDeviceEventTags(tags);
+}
+
+async function untagDeviceEvent(id: string): Promise<void> {
+  const tags = (await getCachedDeviceEventTags()) ?? {};
+  if (!(id in tags)) return;
+  delete tags[id];
+  await cacheDeviceEventTags(tags);
 }
 
 // ── Wall-clock in an IANA zone → epoch ms ───────────────────────────────────
@@ -152,6 +174,7 @@ export async function createDeviceEvent(
     ...(input.location ? { location: input.location } : {}),
     ...(input.note ? { description: input.note } : {}),
   });
+  await tagDeviceEvent(id, input.personId);
   return { id };
 }
 
@@ -171,9 +194,11 @@ export async function modifyDeviceEvent(
     location: input.location ?? "",
     description: input.note ?? "",
   });
+  await tagDeviceEvent(id, input.personId);
 }
 
 export async function deleteDeviceEvent(id: string): Promise<void> {
   const { CapacitorCalendar } = await import("@ebarooni/capacitor-calendar");
   await CapacitorCalendar.deleteEvent({ id });
+  await untagDeviceEvent(id);
 }

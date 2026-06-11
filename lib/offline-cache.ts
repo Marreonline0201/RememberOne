@@ -257,3 +257,14 @@ export const cacheConnectionFlag = (connected: boolean) =>
 
 export const getCachedCalendarEvents = () => getMeta<CachedCalendar>("calendar");
 export const cacheCalendarEvents = (c: CachedCalendar) => setMeta("calendar", c);
+
+// App-created PHONE-calendar events: device event id → picked personId | "me".
+// The device calendar has no private-tag field (unlike Google's
+// extendedProperties), so this registry is what keeps an app-created device
+// event visible (a "Just me" or custom-titled event matches no saved person
+// by name) and lets the edit dialog preselect the exact person.
+export type DeviceEventTags = Record<string, string>;
+export const getCachedDeviceEventTags = () =>
+  getMeta<DeviceEventTags>("deviceEventTags");
+export const cacheDeviceEventTags = (t: DeviceEventTags) =>
+  setMeta("deviceEventTags", t);

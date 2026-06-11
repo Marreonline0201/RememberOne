@@ -57,8 +57,9 @@ interface Props {
    *  attempted (permission is requested at first save; a denial — e.g. an
    *  install whose manifest predates WRITE_CALENDAR — falls back to Google). */
   deviceAvailable: boolean;
-  /** Reports a fresh device write grant so the parent can update gating. */
-  onDeviceGranted: () => void;
+  /** Called after a fresh device write grant — promotes read access too (the
+   *  permissions share a group) so the just-saved event actually renders. */
+  onDeviceGranted: () => void | Promise<void>;
   /** Refetch + re-cache events; awaited before the dialog closes. */
   onSaved: () => Promise<void> | void;
 }
@@ -213,10 +214,14 @@ export function AddCalendarEventDialog({
   const durationLabel = (m: number) =>
     m % 60 === 0 ? (ko ? `${m / 60}시간` : `${m / 60} h`) : ko ? `${m}분` : `${m} min`;
 
-  // The Google connect/reconnect prompt only matters when the phone-calendar
-  // path can't carry the write (web, or a device-write denial).
+  // When the Google connect/reconnect prompt takes over the dialog body:
+  // - needsReauth means a Google-routed write already failed on scope/session —
+  //   only a (re)connect can fix it, so it shows even on native (a device-
+  //   sourced event never sets it).
+  // - otherwise only when the phone-calendar path can't carry the write
+  //   (web, or a device-write denial) AND there's no Google connection.
   const showConnect =
-    (!deviceAvailable || deviceDenied) && (!hasConnection || needsReauth);
+    needsReauth || ((!deviceAvailable || deviceDenied) && !hasConnection);
 
   // Wall-clock fields shared by both write paths.
   const eventInput = () => ({
@@ -225,16 +230,26 @@ export function AddCalendarEventDialog({
     durationMin: duration,
     timeZone: timezone,
     title: title.trim() || autoTitle,
+    personId,
     location: location.trim() || null,
     note: note.trim() || null,
   });
 
-  // Try to take (or confirm) phone-calendar write access. A denial flips the
-  // dialog into Google-fallback mode for the rest of this open.
+  // Take (or confirm) phone-calendar write access for a CREATE. A denial flips
+  // the dialog into Google-fallback mode for the rest of this open.
   async function takeDeviceWrite(): Promise<boolean> {
     const ok = await ensureDeviceWriteAccess();
-    if (ok) onDeviceGranted();
+    if (ok) await onDeviceGranted();
     else setDeviceDenied(true);
+    return ok;
+  }
+
+  // Same, for editing/deleting a DEVICE event: a denial here must NOT swap the
+  // dialog to the Google prompt — Google can't modify a device-id event.
+  async function deviceWriteForExisting(): Promise<boolean> {
+    const ok = await ensureDeviceWriteAccess();
+    if (ok) await onDeviceGranted();
+    else setError(t("calendar.save_failed"));
     return ok;
   }
 
@@ -248,7 +263,6 @@ export function AddCalendarEventDialog({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...eventInput(),
-        personId,
         ...(editing ? { eventId: editing.id } : {}),
       }),
     });
@@ -276,12 +290,10 @@ export function AddCalendarEventDialog({
       // Device-sourced events only exist on the phone for us (no Google id) —
       // they must change on-device.
       if (editing && editing.source === "device") {
-        if (await takeDeviceWrite()) {
+        if (await deviceWriteForExisting()) {
           await modifyDeviceEvent(editing.id, eventInput());
           await onSaved();
           onOpenChange(false);
-        } else {
-          setError(t("calendar.save_failed"));
         }
         return;
       }
@@ -313,12 +325,10 @@ export function AddCalendarEventDialog({
     setError(null);
     try {
       if (editing.source === "device") {
-        if (await takeDeviceWrite()) {
+        if (await deviceWriteForExisting()) {
           await deleteDeviceEvent(editing.id);
           await onSaved();
           onOpenChange(false);
-        } else {
-          setError(t("calendar.save_failed"));
         }
         return;
       }
