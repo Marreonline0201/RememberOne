@@ -20,6 +20,40 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
+// ── Per-build cache version ──────────────────────────────────────────────
+// The navigation caches below hold App Router page shells. A shell references
+// the build's client-chunk filenames, so a shell cached by build A renders
+// BLANK if served into build B (B's chunks have different hashed names). To
+// avoid serving a cross-build-stale shell after a deploy, the cache names carry
+// a per-build revision derived from the injected precache manifest — which
+// includes the content-hashed _next/static/chunks/* and the Next build id, so
+// it changes on exactly the builds that change client chunks. A new build thus
+// starts with an EMPTY page cache and fetches the matching shell from the
+// network (online), instead of the previous build's broken one.
+function buildRev(manifest: (PrecacheEntry | string)[] | undefined): string {
+  if (!manifest || manifest.length === 0) return "dev";
+  let acc = "";
+  for (const e of manifest) {
+    acc += typeof e === "string" ? e : `${e.url}:${e.revision ?? ""}`;
+  }
+  // FNV-1a 32-bit → base36. Math.imul keeps the multiply 32-bit.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < acc.length; i++) {
+    h ^= acc.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+// Read the injected manifest ONCE — the Serwist build replaces the single
+// `self.__SW_MANIFEST` token, and it errors if the token appears more than once.
+const swManifest = self.__SW_MANIFEST;
+// `ro-` prefix keeps OUR cache names clear of Serwist's defaultCache, which
+// already owns `pages`, `pages-rsc`, and `pages-rsc-prefetch` — so the activate
+// cleanup below can match `ro-pages-*` and never touch a Serwist-managed cache.
+const REV = buildRev(swManifest);
+const RSC_CACHE = `ro-pages-rsc-${REV}`;
+const DOC_CACHE = `ro-pages-doc-${REV}`;
+
 // ── App Router navigation caching ────────────────────────────────────────
 // Next.js navigation arrives as RSC requests and full document loads. The
 // default strategy (NetworkFirst) fails offline; StaleWhileRevalidate serves
@@ -53,9 +87,9 @@ const navigationCaching: RuntimeCaching[] = [
       request.headers.get("RSC") === "1" &&
       !request.headers.has("Next-Router-Segment-Prefetch"),
     handler: new StaleWhileRevalidate({
-      // -v2: bumped when the cached shells changed shape (calendar/account/meet
-      // became data-free client shells) so stale server-data RSCs aren't served.
-      cacheName: "pages-rsc-full-v2",
+      // Per-build name (see buildRev): a new deploy starts fresh so a stale
+      // cross-build shell can never be served (it would render blank).
+      cacheName: RSC_CACHE,
       matchOptions: { ignoreSearch: true, ignoreVary: true },
       plugins: pageExpiration(),
     }),
@@ -67,14 +101,14 @@ const navigationCaching: RuntimeCaching[] = [
       !pathname.startsWith("/api/") &&
       request.destination === "document",
     handler: new StaleWhileRevalidate({
-      cacheName: "pages",
+      cacheName: DOC_CACHE,
       plugins: pageExpiration(),
     }),
   },
 ];
 
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
+  precacheEntries: swManifest,
   skipWaiting: true,
   clientsClaim: true,
   // We serve navigations from cache (SWR), so navigation preload would be wasted.
@@ -96,18 +130,27 @@ const serwist = new Serwist({
   },
 });
 
-// Drop legacy navigation caches from earlier SW versions so a stale entry can't
-// be served offline: `pages-rsc` (pre-unify, could hold loading-shell partials)
-// and `pages-rsc-full` (held calendar/account/meet RSCs with server data baked
-// in, before they became data-free client shells). The current SW reads/writes
-// `pages-rsc-full-v2`, so the first online load after this update re-warms the
-// new shells instead of serving stale server-rendered HTML.
+// On activate, drop every page cache that isn't THIS build's, so a stale
+// cross-build shell can't be served and old per-build caches don't accumulate.
+// We only ever delete OUR caches: the current `ro-pages-*` scheme (any earlier
+// build's `ro-pages-rsc-*`/`ro-pages-doc-*`) plus our own pre-rename names
+// (`pages-rsc-full`, `pages-rsc-full-v2`). We deliberately do NOT touch
+// Serwist's `pages` / `pages-rsc` / `pages-rsc-prefetch` defaultCache caches.
+// (Our old doc cache was literally `pages`, shared with Serwist's — it's now
+// shadowed by the new matcher and left to Serwist's expiration, never served.)
+const OWN_LEGACY_CACHES = ["pages-rsc-full", "pages-rsc-full-v2"];
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    Promise.all([
-      caches.delete("pages-rsc"),
-      caches.delete("pages-rsc-full"),
-    ]).catch(() => false),
+    (async () => {
+      const keep = new Set([RSC_CACHE, DOC_CACHE]);
+      const names = await caches.keys();
+      const stale = names.filter(
+        (n) =>
+          !keep.has(n) &&
+          (n.startsWith("ro-pages-") || OWN_LEGACY_CACHES.includes(n)),
+      );
+      await Promise.all(stale.map((n) => caches.delete(n)));
+    })().catch(() => false),
   );
 });
 
