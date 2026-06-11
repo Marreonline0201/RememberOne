@@ -26,6 +26,12 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
+import {
+  createDeviceEvent,
+  modifyDeviceEvent,
+  deleteDeviceEvent,
+  ensureDeviceWriteAccess,
+} from "@/lib/device-calendar";
 import { cacheConnectionFlag } from "@/lib/offline-cache";
 import { getLanguage } from "@/lib/i18n";
 import { addDaysToKey, formatDate, dateKeyInZone, todayKeyInZone } from "@/lib/utils";
@@ -42,9 +48,17 @@ interface Props {
   /** The tapped calendar date (YYYY-MM-DD) — the create-mode event date. */
   dateKey: string;
   people: PersonFull[];
-  /** When set, the dialog edits this (app-created) event instead of creating. */
+  /** When set, the dialog edits this event instead of creating. */
   editing: CalendarEvent | null;
+  /** The edited event's matched person (device events carry no tag). */
+  editingPersonId: string | null;
   hasConnection: boolean;
+  /** Native + calendar plugin present — the phone-calendar write path can be
+   *  attempted (permission is requested at first save; a denial — e.g. an
+   *  install whose manifest predates WRITE_CALENDAR — falls back to Google). */
+  deviceAvailable: boolean;
+  /** Reports a fresh device write grant so the parent can update gating. */
+  onDeviceGranted: () => void;
   /** Refetch + re-cache events; awaited before the dialog closes. */
   onSaved: () => Promise<void> | void;
 }
@@ -81,7 +95,10 @@ export function AddCalendarEventDialog({
   dateKey,
   people,
   editing,
+  editingPersonId,
   hasConnection,
+  deviceAvailable,
+  onDeviceGranted,
   onSaved,
 }: Props) {
   const { language, t } = useLanguage();
@@ -101,6 +118,10 @@ export function AddCalendarEventDialog({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
+  // Phone-calendar write was attempted and denied this session (old install
+  // without WRITE_CALENDAR, or the user refused) — stop retrying the prompt
+  // and use the Google path instead.
+  const [deviceDenied, setDeviceDenied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // (Re)initialize the form each time the dialog opens — not on later prop
@@ -109,7 +130,10 @@ export function AddCalendarEventDialog({
   useEffect(() => {
     if (open && !wasOpen.current) {
       if (editing) {
-        setPersonId(editing.appPersonId ?? "me");
+        // Person: the explicit app tag wins; else the matched person passed in
+        // (device events carry no tag); else "me".
+        const resolvedPersonId = editing.appPersonId ?? editingPersonId ?? "me";
+        setPersonId(resolvedPersonId);
         setDate(dateKeyInZone(editing.start, timezone));
         setTime(editing.start.includes("T") ? toHHmm(editing.start, timezone) : "");
         setDuration(durationFromEvent(editing));
@@ -117,8 +141,8 @@ export function AddCalendarEventDialog({
         // is exactly the prefilled person's auto title, so switching the person
         // re-titles the event instead of keeping a stale "Meet {old name}".
         const prefillPerson =
-          editing.appPersonId && editing.appPersonId !== "me"
-            ? people.find((p) => p.id === editing.appPersonId) ?? null
+          resolvedPersonId !== "me"
+            ? people.find((p) => p.id === resolvedPersonId) ?? null
             : null;
         const prefillAuto = prefillPerson
           ? ko
@@ -142,10 +166,11 @@ export function AddCalendarEventDialog({
       setSaving(false);
       setConfirmDelete(false);
       setNeedsReauth(false);
+      setDeviceDenied(false);
       setError(null);
     }
     wasOpen.current = open;
-  }, [open, editing, dateKey, timezone, people, ko, t]);
+  }, [open, editing, editingPersonId, dateKey, timezone, people, ko, t]);
 
   // After a successful native (re)connect, refresh the cached connection flag
   // directly — its normal writer is the home load, so the calendar page would
@@ -188,46 +213,93 @@ export function AddCalendarEventDialog({
   const durationLabel = (m: number) =>
     m % 60 === 0 ? (ko ? `${m / 60}시간` : `${m / 60} h`) : ko ? `${m}분` : `${m} min`;
 
-  const showConnect = !hasConnection || needsReauth;
+  // The Google connect/reconnect prompt only matters when the phone-calendar
+  // path can't carry the write (web, or a device-write denial).
+  const showConnect =
+    (!deviceAvailable || deviceDenied) && (!hasConnection || needsReauth);
 
-  async function submit() {
-    if (saving) return;
+  // Wall-clock fields shared by both write paths.
+  const eventInput = () => ({
+    date,
+    time: time || null,
+    durationMin: duration,
+    timeZone: timezone,
+    title: title.trim() || autoTitle,
+    location: location.trim() || null,
+    note: note.trim() || null,
+  });
+
+  // Try to take (or confirm) phone-calendar write access. A denial flips the
+  // dialog into Google-fallback mode for the rest of this open.
+  async function takeDeviceWrite(): Promise<boolean> {
+    const ok = await ensureDeviceWriteAccess();
+    if (ok) onDeviceGranted();
+    else setDeviceDenied(true);
+    return ok;
+  }
+
+  async function saveViaGoogle(): Promise<void> {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       setError(t("calendar.save_failed"));
       return;
     }
+    const res = await fetch("/api/calendar/event", {
+      method: editing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...eventInput(),
+        personId,
+        ...(editing ? { eventId: editing.id } : {}),
+      }),
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (j?.error === "reauth_required" || j?.error === "not_connected") {
+        setNeedsReauth(true);
+      } else if (j?.error === "event_not_found") {
+        setError(t("calendar.event_gone"));
+        void onSaved(); // refresh so the stale event disappears
+      } else {
+        setError(t("calendar.save_failed"));
+      }
+      return;
+    }
+    await onSaved();
+    onOpenChange(false);
+  }
+
+  async function submit() {
+    if (saving) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/calendar/event", {
-        method: editing ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date,
-          time: time || null,
-          durationMin: duration,
-          timeZone: timezone,
-          title: title.trim() || autoTitle,
-          personId,
-          location: location.trim() || null,
-          note: note.trim() || null,
-          ...(editing ? { eventId: editing.id } : {}),
-        }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        if (j?.error === "reauth_required" || j?.error === "not_connected") {
-          setNeedsReauth(true);
-        } else if (j?.error === "event_not_found") {
-          setError(t("calendar.event_gone"));
-          void onSaved(); // refresh so the stale event disappears
+      // Device-sourced events only exist on the phone for us (no Google id) —
+      // they must change on-device.
+      if (editing && editing.source === "device") {
+        if (await takeDeviceWrite()) {
+          await modifyDeviceEvent(editing.id, eventInput());
+          await onSaved();
+          onOpenChange(false);
         } else {
           setError(t("calendar.save_failed"));
         }
         return;
       }
-      await onSaved();
-      onOpenChange(false);
+      // Creates prefer the phone calendar when the plugin is present: works
+      // offline, no Google account needed; the phone itself syncs the event up
+      // to Google. Denied (old install / refusal) → Google fallback.
+      if (!editing && deviceAvailable && !deviceDenied) {
+        if (await takeDeviceWrite()) {
+          await createDeviceEvent(eventInput());
+          await onSaved();
+          onOpenChange(false);
+          return;
+        }
+        if (!hasConnection) return; // showConnect takes over the dialog body
+      }
+      // Google path: creates without a device, and edits of Google-sourced
+      // events (any event — full charge — not just app-created ones).
+      await saveViaGoogle();
     } catch {
       setError(t("calendar.save_failed"));
     } finally {
@@ -240,6 +312,16 @@ export function AddCalendarEventDialog({
     setSaving(true);
     setError(null);
     try {
+      if (editing.source === "device") {
+        if (await takeDeviceWrite()) {
+          await deleteDeviceEvent(editing.id);
+          await onSaved();
+          onOpenChange(false);
+        } else {
+          setError(t("calendar.save_failed"));
+        }
+        return;
+      }
       const res = await fetch("/api/calendar/event", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },

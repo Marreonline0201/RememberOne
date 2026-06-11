@@ -2,23 +2,27 @@
 
 // useDeviceCalendar — reads the phone's on-device calendar (Galaxy/Samsung,
 // iPhone, etc.) and surfaces events that match a saved person, mirroring the
-// Google "upcoming meetings" feature.
+// Google "upcoming meetings" feature. With WRITE_CALENDAR granted (builds that
+// declare it), the phone calendar is also the app's primary WRITE target — see
+// lib/device-calendar.ts.
 //
-// Native only. The device calendar can only be read by native code, so this
+// Native only. The device calendar can only be reached by native code, so this
 // hook is a no-op ("unavailable") on web/desktop. It also guards on
 // isPluginAvailable so the instantly-deployed web bundle never crashes on app
 // installs that predate the native plugin (they just stay "unavailable").
 //
 // Flow: requestReadOnlyCalendarAccess (Android) / requestFullCalendarAccess
-// (iOS — no read-only tier on iOS 17) → listEventsInRange (next 7 days) →
-// match to cached people on-device (offline-safe, no server round-trip) → alerts.
+// (iOS — no read-only tier on iOS 17) → listEventsInRange (62 days, matching
+// the Google window + the add-event horizon) → match to cached people
+// on-device (offline-safe, no server round-trip) → alerts.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCachedPeople } from "@/lib/offline-cache";
 import { matchEventsToPeopleClient } from "@/lib/calendar-match-client";
+import { checkDeviceWriteAccess } from "@/lib/device-calendar";
 import type { CalendarEvent, UpcomingMeetingAlert } from "@/types/app";
 
-const DAYS_AHEAD = 7; // mirror the Google window (lib/google-calendar.ts)
+const DAYS_AHEAD = 62; // mirror the Google window (lib/google-calendar.ts)
 const PLUGIN_NAME = "CapacitorCalendar";
 
 export type DeviceCalendarStatus =
@@ -34,33 +38,48 @@ interface PluginEvent {
   id: string;
   title: string | null;
   description: string | null;
+  location?: string | null;
   startDate: number;
   endDate: number;
+  isAllDay?: boolean;
   attendees?: { email: string | null; name: string | null }[];
 }
 
 function mapEvent(ev: PluginEvent): CalendarEvent {
   const startMs = ev.startDate;
   const endMs = ev.endDate || ev.startDate;
+  // All-day events: Android stores them as UTC day spans — normalize to the
+  // same date-only string shape Google uses ("2026-06-15"), so the "All day"
+  // label, day placement, and the title+minute dedupe all line up.
+  const start = ev.isAllDay
+    ? new Date(startMs).toISOString().slice(0, 10)
+    : new Date(startMs).toISOString();
+  const end = ev.isAllDay
+    ? new Date(endMs).toISOString().slice(0, 10)
+    : new Date(endMs).toISOString();
   return {
     id: ev.id,
     summary: ev.title || "(No title)",
     description: ev.description ?? null,
-    location: null, // the device plugin payload we read has no location
-    start: new Date(startMs).toISOString(),
-    end: new Date(endMs).toISOString(),
+    location: ev.location ?? null,
+    start,
+    end,
     attendees: (ev.attendees ?? []).map((a) => ({
       email: a.email ?? "",
       displayName: a.name ?? null,
       responseStatus: "needsAction",
     })),
     htmlLink: "",
+    source: "device",
   };
 }
 
 export function useDeviceCalendar(enabled: boolean = true) {
   const [alerts, setAlerts] = useState<UpcomingMeetingAlert[]>([]);
   const [status, setStatus] = useState<DeviceCalendarStatus>("idle");
+  // Write permission state (render-time gating only; the save path re-checks
+  // and requests via ensureDeviceWriteAccess).
+  const [writable, setWritable] = useState(false);
   const busyRef = useRef(false);
 
   const readAndMatch = useCallback(async () => {
@@ -118,6 +137,11 @@ export function useDeviceCalendar(enabled: boolean = true) {
           scope: CalendarPermissionScope.READ_CALENDAR,
         });
         if (cancelled) return;
+        // Non-prompting write check (auto-denied on builds without
+        // WRITE_CALENDAR in the manifest — that's the graceful fallback).
+        void checkDeviceWriteAccess().then((w) => {
+          if (!cancelled) setWritable(w);
+        });
         if (result === "granted") {
           await readAndMatch();
         } else {
@@ -143,6 +167,9 @@ export function useDeviceCalendar(enabled: boolean = true) {
       const { CapacitorCalendar } = await import("@ebarooni/capacitor-calendar");
 
       // iOS 17 has no read-only calendar tier — reading requires full access.
+      // Android: request READ here (works on every shipped build); WRITE is
+      // requested lazily at the first save (ensureDeviceWriteAccess), so old
+      // manifests without WRITE_CALENDAR keep the read flow fully working.
       const { result } =
         platform === "ios"
           ? await CapacitorCalendar.requestFullCalendarAccess()
@@ -161,5 +188,15 @@ export function useDeviceCalendar(enabled: boolean = true) {
     }
   }, [readAndMatch]);
 
-  return { alerts, status, connect };
+  // Re-read after a device write so the new/changed event shows immediately.
+  const refresh = useCallback(async () => {
+    if (status !== "granted") return;
+    await readAndMatch();
+  }, [status, readAndMatch]);
+
+  // The save path requests write access itself; let it report a fresh grant
+  // back so render-time gating updates without a remount.
+  const markWritable = useCallback((w: boolean) => setWritable(w), []);
+
+  return { alerts, status, connect, writable, markWritable, refresh };
 }

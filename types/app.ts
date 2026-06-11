@@ -68,6 +68,10 @@ export interface CalendarEvent {
   // Optional: events cached before this field existed simply lack it.
   appCreated?: boolean;
   appPersonId?: string | null;      // the picked person's id, or "me"
+  // Which backend this copy came from — routes edits/deletes (device events
+  // change via the Capacitor calendar plugin, Google events via the API).
+  // Optional: blobs cached before this field count as "google".
+  source?: "google" | "device";
 }
 
 export interface CalendarAttendee {

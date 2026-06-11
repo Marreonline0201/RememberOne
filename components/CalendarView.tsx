@@ -193,8 +193,9 @@ function DeviceCalendarPrompt({
 
 // ── Upcoming event card ──────────────────────────────────────
 // One Google/device event with its matched person cards. Used by both the
-// "Upcoming Meetings" list and the selected-date section. App-created events
-// (event.appCreated) get a pencil that opens the edit dialog.
+// "Upcoming Meetings" list and the selected-date section. Every event gets a
+// pencil that opens the edit dialog ("full charge": device events change via
+// the calendar plugin, Google events via the API).
 function UpcomingEventCard({
   alert,
   language,
@@ -208,7 +209,7 @@ function UpcomingEventCard({
   locale: string;
   timezone: string;
   allDayLabel: string;
-  onEdit?: (event: CalendarEvent) => void;
+  onEdit?: (alert: UpcomingAlertType) => void;
 }) {
   const eventDate = dateKeyInZone(alert.event.start, timezone);
   const isAllDay = !alert.event.start.includes("T");
@@ -245,9 +246,9 @@ function UpcomingEventCard({
               {eventTime}
             </span>
           </div>
-          {alert.event.appCreated && onEdit && (
+          {onEdit && (
             <button
-              onClick={() => onEdit(alert.event)}
+              onClick={() => onEdit(alert)}
               aria-label={language === "ko" ? "일정 수정" : "Edit event"}
               className="w-8 h-8 -mr-1 flex items-center justify-center rounded-full text-black/45 hover:text-black hover:bg-white/60 transition-colors flex-shrink-0"
             >
@@ -374,20 +375,35 @@ export function CalendarView() {
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
 
   // Add/edit-event dialog. editingEvent null = create on the selected date.
+  // The matched person rides along so the edit dialog can preselect them even
+  // for device events (which carry no appPersonId tag).
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const openEditEvent = (event: CalendarEvent) => {
-    setEditingEvent(event);
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const openEditEvent = (alert: UpcomingAlertType) => {
+    setEditingEvent(alert.event);
+    setEditingPersonId(
+      alert.event.appPersonId ?? alert.matchedPeople[0]?.id ?? null
+    );
     setEventDialogOpen(true);
   };
 
   // Device (phone) calendar — native only. Reads on-device events and matches
-  // them to people FULLY ON-DEVICE (offline-safe), independent of Google.
+  // them to people FULLY ON-DEVICE (offline-safe), independent of Google. With
+  // write access (builds declaring WRITE_CALENDAR) it's also the app's primary
+  // write target — no Google connection needed on the phone.
   const {
     alerts: deviceAlerts,
     status: deviceStatus,
     connect: connectDevice,
+    markWritable: markDeviceWritable,
+    refresh: refreshDeviceEvents,
   } = useDeviceCalendar(hasPeople);
+
+  // Native + plugin present (any permission state) — the device write path can
+  // be attempted (the save flow requests permission itself).
+  const deviceAvailable =
+    deviceStatus !== "unavailable" && deviceStatus !== "idle";
 
   // Cached Google calendar, stored NORMALIZED (matched person IDs) and hydrated
   // against the current people store at render time — so it shows offline (the
@@ -434,6 +450,15 @@ export function CalendarView() {
     void refreshEvents();
   }, [online, hasCalendarConnection, refreshEvents]);
 
+  // After any write (device or Google), refresh both sources so the change
+  // shows immediately. Each side no-ops when it doesn't apply.
+  const handleSaved = useCallback(async () => {
+    await Promise.all([
+      online && hasCalendarConnection ? refreshEvents() : Promise.resolve(),
+      refreshDeviceEvents(),
+    ]);
+  }, [online, hasCalendarConnection, refreshEvents, refreshDeviceEvents]);
+
   // Hydrate the cached normalized events into full alerts using current people.
   // Zero-match events stay hidden (their person was deleted) — EXCEPT events
   // created from this app, which must show even with no person ("Just me").
@@ -467,10 +492,16 @@ export function CalendarView() {
   // Key = normalized title + start INSTANT (epoch minute), not the raw ISO
   // string: Google returns a tz offset ("...T10:30:00+09:00") while the device
   // returns UTC ("...T01:30:00Z"), so comparing string prefixes never matched.
+  // Source priority: once the device calendar is readable, its copy wins the
+  // dedupe — device copies carry the plugin's event id, so they stay editable
+  // on-device (offline too); Google copies need the API + write scope.
+  const deviceGranted = deviceStatus === "granted";
   const upcomingAlerts = useMemo(() => {
     const seen = new Set<string>();
     const merged: UpcomingAlertType[] = [];
-    for (const a of [...googleAlerts, ...deviceAlerts]) {
+    for (const a of deviceGranted
+      ? [...deviceAlerts, ...googleAlerts]
+      : [...googleAlerts, ...deviceAlerts]) {
       const startMs = new Date(a.event.start).getTime();
       const startKey = Number.isNaN(startMs)
         ? a.event.start
@@ -484,7 +515,7 @@ export function CalendarView() {
       (x, y) => new Date(x.event.start).getTime() - new Date(y.event.start).getTime()
     );
     return merged;
-  }, [googleAlerts, deviceAlerts]);
+  }, [googleAlerts, deviceAlerts, deviceGranted]);
 
   // Build fast lookup structures
   const meetingDates = new Set(groups.map((g) => g.dateKey));
@@ -597,21 +628,23 @@ export function CalendarView() {
       )}
 
       {/* Add a meeting on this date — today through the fetch horizon only
-          (an event past ?days=62 would save to Google but never display
-          here), and it needs the network. */}
+          (an event past the 62-day window would save but never display here).
+          The phone-calendar path works offline; the Google path needs network,
+          so the button only greys out when NEITHER is possible. */}
       {selectedDate >= todayKey &&
         selectedDate <= addDaysToKey(todayKey, MAX_ADD_DAYS_AHEAD) && (
         <button
           onClick={() => {
             setEditingEvent(null);
+            setEditingPersonId(null);
             setEventDialogOpen(true);
           }}
-          disabled={!online}
+          disabled={!online && !deviceAvailable}
           className="w-full flex items-center justify-center gap-1.5 py-2.5 mb-3 text-[13px] transition-opacity active:opacity-80 disabled:opacity-50"
           style={{
             borderRadius: "10px 2px 10px 2px",
             border: "1.5px dashed #b9a8e6",
-            color: online ? "#482d7c" : "#9aa7b0",
+            color: online || deviceAvailable ? "#482d7c" : "#9aa7b0",
             backgroundColor: "rgba(220,202,255,0.12)",
           }}
         >
@@ -876,8 +909,11 @@ export function CalendarView() {
         dateKey={selectedDate ?? todayKey}
         people={people}
         editing={editingEvent}
+        editingPersonId={editingPersonId}
         hasConnection={hasCalendarConnection}
-        onSaved={refreshEvents}
+        deviceAvailable={deviceAvailable}
+        onDeviceGranted={() => markDeviceWritable(true)}
+        onSaved={handleSaved}
       />
 
 

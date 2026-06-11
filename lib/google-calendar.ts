@@ -150,6 +150,7 @@ function normalizeEvent(item: calendar_v3.Schema$Event): CalendarEvent {
     htmlLink: item.htmlLink ?? "",
     appCreated,
     appPersonId: appCreated ? (priv.personId ?? null) : null,
+    source: "google",
   };
 }
 
