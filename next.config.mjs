@@ -50,7 +50,9 @@ const nextConfig = {
   // turbopack config silences that and lets `npm run dev` run, as Next recommends.
   turbopack: {},
   // Renamed from experimental.serverComponentsExternalPackages in Next 15+.
-  serverExternalPackages: ["@google/generative-ai"],
+  // All server-only — keeps them out of the bundle (esp. the very large
+  // googleapis) and guards against an accidental client import.
+  serverExternalPackages: ["@google/generative-ai", "googleapis", "zod"],
   experimental: {
     // Next's default is { dynamic: 0, static: 300 } — with dynamic:0 the client
     // router cache is OFF for dynamic routes, so a prefetched /people/[id] still

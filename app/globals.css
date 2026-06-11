@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Hammersmith+One&family=Instrument+Sans:wght@400;500;600&display=swap');
+/* Web fonts (Hammersmith One, Instrument Sans) are loaded via <link> with
+   preconnect in app/layout.tsx — a render-blocking CSS @import here was fetched
+   late (only after this file parsed) and serialized the round-trip. */
 
 @tailwind base;
 @tailwind components;

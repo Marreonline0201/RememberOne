@@ -514,15 +514,22 @@ export function CalendarView() {
     return merged;
   }, [googleAlerts, deviceAlerts, deviceGranted]);
 
-  // Build fast lookup structures
-  const meetingDates = new Set(groups.map((g) => g.dateKey));
+  // Build fast lookup structures (memoized — these ran on every render before,
+  // and upcomingByDate formats a date per alert).
+  const meetingDates = useMemo(
+    () => new Set(groups.map((g) => g.dateKey)),
+    [groups]
+  );
 
-  const upcomingByDate = new Map<string, UpcomingAlertType[]>();
-  for (const alert of upcomingAlerts) {
-    const dateKey = dateKeyInZone(alert.event.start, timezone);
-    if (!upcomingByDate.has(dateKey)) upcomingByDate.set(dateKey, []);
-    upcomingByDate.get(dateKey)!.push(alert);
-  }
+  const upcomingByDate = useMemo(() => {
+    const map = new Map<string, UpcomingAlertType[]>();
+    for (const alert of upcomingAlerts) {
+      const dateKey = dateKeyInZone(alert.event.start, timezone);
+      if (!map.has(dateKey)) map.set(dateKey, []);
+      map.get(dateKey)!.push(alert);
+    }
+    return map;
+  }, [upcomingAlerts, timezone]);
 
   // When the selected day is pinned on top, its events already show there —
   // drop them from the "Upcoming Meetings" list so the same cards don't render

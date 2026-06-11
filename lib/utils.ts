@@ -9,13 +9,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Cache Intl.DateTimeFormat instances — constructing one is moderately
+// expensive and the calendar formats dates per-event on each render. Formatters
+// are immutable, so a shared (locale, options) instance is always safe.
+const fmtCache = new Map<string, Intl.DateTimeFormat>();
+function intlFormat(
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormat {
+  const key = locale + "|" + JSON.stringify(options);
+  let f = fmtCache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, options);
+    fmtCache.set(key, f);
+  }
+  return f;
+}
+
 // Format a date string (ISO or YYYY-MM-DD) to a readable label, respecting locale
 export function formatDate(dateStr: string | null | undefined, locale = "en-US"): string {
   if (!dateStr) return locale.startsWith("ko") ? "날짜 미상" : "Unknown date";
   try {
     const date = parseISO(dateStr);
     if (!isValid(date)) return dateStr;
-    return new Intl.DateTimeFormat(locale, { year: "numeric", month: "long", day: "numeric" }).format(date);
+    return intlFormat(locale, { year: "numeric", month: "long", day: "numeric" }).format(date);
   } catch {
     return dateStr;
   }
@@ -51,7 +68,7 @@ export function formatTimeInZone(
   try {
     const date = parseISO(dateStr);
     if (!isValid(date)) return "";
-    return new Intl.DateTimeFormat(locale, {
+    return intlFormat(locale, {
       timeZone,
       hour: "2-digit",
       minute: "2-digit",
@@ -75,7 +92,7 @@ export function dateKeyInZone(
   try {
     const date = parseISO(dateStr);
     if (!isValid(date)) return typeof dateStr === "string" ? dateStr.slice(0, 10) : "";
-    return new Intl.DateTimeFormat("en-CA", {
+    return intlFormat("en-CA", {
       timeZone,
       year: "numeric",
       month: "2-digit",

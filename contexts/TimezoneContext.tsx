@@ -5,7 +5,14 @@
 // - mode "manual" → use the explicitly chosen IANA zone (`value`)
 // Persisted to Supabase user metadata as { tz_mode, tz_value }.
 
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export type TimezoneMode = "auto" | "manual";
@@ -54,7 +61,7 @@ export function TimezoneProvider({
   initialMode: string | null;
   initialValue: string | null;
 }) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [mode, setModeState] = useState<TimezoneMode>(
     initialMode === "manual" ? "manual" : "auto"
   );
@@ -73,37 +80,51 @@ export function TimezoneProvider({
 
   // Persist to the server only when online — offline updateUser would hang/reject
   // and nothing queues it; the choice still applies locally for this session.
-  async function persistTz(data: { tz_mode: string; tz_value: string | null }) {
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
-    try {
-      await supabase.auth.updateUser({ data });
-    } catch {
-      /* transient — local state already updated */
-    }
-  }
+  const persistTz = useCallback(
+    async (data: { tz_mode: string; tz_value: string | null }) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      try {
+        await supabase.auth.updateUser({ data });
+      } catch {
+        /* transient — local state already updated */
+      }
+    },
+    [supabase]
+  );
 
-  async function setMode(next: TimezoneMode) {
-    setModeState(next);
-    // When switching to manual without a prior choice, seed with the current
-    // effective zone so the picker starts on something sensible.
-    let nextValue = value;
-    if (next === "manual" && !nextValue) {
-      nextValue = autoTimezone ?? FALLBACK_TZ;
-      setValueState(nextValue);
-    }
-    await persistTz({ tz_mode: next, tz_value: nextValue });
-  }
+  const setMode = useCallback(
+    async (next: TimezoneMode) => {
+      setModeState(next);
+      // When switching to manual without a prior choice, seed with the current
+      // effective zone so the picker starts on something sensible.
+      let nextValue = value;
+      if (next === "manual" && !nextValue) {
+        nextValue = autoTimezone ?? FALLBACK_TZ;
+        setValueState(nextValue);
+      }
+      await persistTz({ tz_mode: next, tz_value: nextValue });
+    },
+    [value, autoTimezone, persistTz]
+  );
 
-  async function setTimezone(tz: string) {
-    setValueState(tz);
-    setModeState("manual");
-    await persistTz({ tz_mode: "manual", tz_value: tz });
-  }
+  const setTimezone = useCallback(
+    async (tz: string) => {
+      setValueState(tz);
+      setModeState("manual");
+      await persistTz({ tz_mode: "manual", tz_value: tz });
+    },
+    [persistTz]
+  );
+
+  // Memoize so timezone-aware consumers (CalendarView, formatters) don't
+  // re-render on every unrelated parent render.
+  const contextValue = useMemo(
+    () => ({ timezone, mode, autoTimezone, value, setMode, setTimezone }),
+    [timezone, mode, autoTimezone, value, setMode, setTimezone]
+  );
 
   return (
-    <TimezoneContext.Provider
-      value={{ timezone, mode, autoTimezone, value, setMode, setTimezone }}
-    >
+    <TimezoneContext.Provider value={contextValue}>
       {children}
     </TimezoneContext.Provider>
   );
