@@ -22,6 +22,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 
 type Mode = "signin" | "signup";
+type OAuthProvider = "google" | "apple";
+
+// Sign in with Apple is gated behind an env flag: the Supabase Apple provider
+// can only be configured once the Apple Developer enrollment + Services ID +
+// .p8 key exist. Until then the button would error, so it stays hidden.
+// Flip NEXT_PUBLIC_APPLE_SIGNIN=1 (and redeploy) after configuring Supabase.
+const APPLE_SIGNIN_ENABLED = process.env.NEXT_PUBLIC_APPLE_SIGNIN === "1";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,7 +40,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  // Which OAuth provider is mid-flight (null = none). One state for both
+  // buttons — only one OAuth redirect can be in progress at a time.
+  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
 
   useEffect(() => {
     // On native only: try to rehydrate a session from Capacitor Preferences.
@@ -102,10 +111,10 @@ export default function LoginPage() {
               description:
                 err instanceof Error
                   ? err.message
-                  : "Could not complete Google sign-in on the app.",
+                  : "Could not complete sign-in on the app.",
               variant: "destructive",
             });
-            setGoogleLoading(false);
+            setOauthLoading(null);
           }
         });
         cleanup = () => handle.then((h) => h.remove());
@@ -114,17 +123,19 @@ export default function LoginPage() {
     return () => cleanup?.();
   }, [router, supabase, toast]);
 
-  async function handleGoogleSignIn() {
-    setGoogleLoading(true);
+  async function handleOAuthSignIn(provider: OAuthProvider) {
+    setOauthLoading(provider);
     try {
       const { Capacitor } = await import("@capacitor/core");
       if (Capacitor.isNativePlatform()) {
-        // Native: open in system browser to avoid Google's WebView block.
-        // redirectTo uses the verified Android App Link (P1-02): Android
-        // routes the HTTPS callback to this app via the autoVerify intent
-        // filter in AndroidManifest.xml + /.well-known/assetlinks.json.
+        // Native: open in the system browser — Google rejects OAuth inside
+        // embedded WebViews (disallowed_useragent), and the system browser
+        // is the right path for Apple too. redirectTo uses the verified
+        // Android App Link (P1-02): Android routes the HTTPS callback to
+        // this app via the autoVerify intent filter in AndroidManifest.xml
+        // + /.well-known/assetlinks.json.
         const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
+          provider,
           options: {
             redirectTo: "https://rememberone.online/auth/callback",
             skipBrowserRedirect: true,
@@ -133,7 +144,7 @@ export default function LoginPage() {
         if (error) throw error;
         const { Browser } = await import("@capacitor/browser");
         await Browser.open({ url: data.url! });
-        setGoogleLoading(false);
+        setOauthLoading(null);
         return;
       }
     } catch {
@@ -142,20 +153,23 @@ export default function LoginPage() {
 
     // Web flow
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) {
       toast({
-        title: "Google sign-in failed",
+        title:
+          provider === "apple"
+            ? "Apple sign-in failed"
+            : "Google sign-in failed",
         description: error.message,
         variant: "destructive",
       });
-      setGoogleLoading(false);
+      setOauthLoading(null);
     }
-    // On success, browser redirects to Google — no need to reset loading
+    // On success, browser redirects to the provider — no need to reset loading
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -251,15 +265,41 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="space-y-4">
+            {/* Sign in with Apple — Apple HIG: must be no smaller or less
+                prominent than other sign-in buttons, approved label text,
+                black style. Kept ABOVE the Google button on purpose. */}
+            {APPLE_SIGNIN_ENABLED && (
+              <Button
+                type="button"
+                className="w-full h-11 flex items-center gap-2 bg-black text-white hover:bg-black/90"
+                onClick={() => handleOAuthSignIn("apple")}
+                disabled={oauthLoading !== null || loading}
+              >
+                {oauthLoading === "apple" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <svg
+                    className="w-4 h-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.03 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.702" />
+                  </svg>
+                )}
+                {oauthLoading === "apple" ? "Redirecting..." : "Continue with Apple"}
+              </Button>
+            )}
+
             {/* Google Sign In — tall touch target */}
             <Button
               type="button"
               variant="outline"
               className="w-full h-11 flex items-center gap-2"
-              onClick={handleGoogleSignIn}
-              disabled={googleLoading || loading}
+              onClick={() => handleOAuthSignIn("google")}
+              disabled={oauthLoading !== null || loading}
             >
-              {googleLoading ? (
+              {oauthLoading === "google" ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <svg
@@ -285,7 +325,7 @@ export default function LoginPage() {
                   />
                 </svg>
               )}
-              {googleLoading ? "Redirecting..." : "Continue with Google"}
+              {oauthLoading === "google" ? "Redirecting..." : "Continue with Google"}
             </Button>
 
             {/* Divider */}

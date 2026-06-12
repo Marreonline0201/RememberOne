@@ -74,32 +74,40 @@ const keys: Translations = {
     ko: "계정 삭제",
   },
   "account.delete_description": {
-    en: "To permanently delete your account and all associated data (contacts, meetings, notes), follow these steps:",
-    ko: "계정과 모든 관련 데이터(연락처, 미팅, 메모)를 영구적으로 삭제하려면 아래 단계를 따르세요.",
+    en: "Permanently delete your account and all data stored with it. Deletion happens immediately and cannot be undone.",
+    ko: "계정과 함께 저장된 모든 데이터를 영구적으로 삭제합니다. 삭제는 즉시 진행되며 취소할 수 없습니다.",
   },
-  "account.delete_step1": {
-    en: "Sign in to RememberOne at rememberone.online",
-    ko: "rememberone.online에서 RememberOne에 로그인하세요",
+  "account.delete_button": {
+    en: "Delete my account",
+    ko: "내 계정 삭제",
   },
-  "account.delete_step2": {
-    en: "Open this Account page by tapping your profile picture",
-    ko: "프로필 사진을 눌러 이 계정 페이지를 여세요",
+  "account.delete_confirm_title": {
+    en: "Delete your account forever?",
+    ko: "계정을 영구적으로 삭제할까요?",
   },
-  "account.delete_step3": {
-    en: "Tap \"Sign out\" above to confirm your identity",
-    ko: "위의 \"로그아웃\"을 눌러 신원을 확인하세요",
+  "account.delete_confirm_body": {
+    en: "This immediately and permanently deletes your account and everything in it. There is no way to undo this or recover your data.",
+    ko: "계정과 모든 데이터가 즉시 영구 삭제됩니다. 되돌리거나 복구할 방법이 없습니다.",
   },
-  "account.delete_step4": {
-    en: "Send a deletion request to the email below — include the email address associated with your account",
-    ko: "아래 이메일로 삭제 요청을 보내세요 — 계정에 연결된 이메일 주소를 포함해 주세요",
+  "account.delete_confirm_yes": {
+    en: "Yes, delete everything",
+    ko: "네, 모두 삭제합니다",
   },
-  "account.delete_step5": {
-    en: "We will permanently delete your account and all data within 30 days",
-    ko: "30일 이내에 계정과 모든 데이터를 영구적으로 삭제해 드립니다",
+  "account.delete_cancel": {
+    en: "Cancel",
+    ko: "취소",
   },
-  "account.delete_note": {
-    en: "Note: deletion is permanent and cannot be undone. All your saved contacts and meeting history will be removed.",
-    ko: "참고: 삭제는 영구적이며 취소할 수 없습니다. 저장된 모든 연락처와 미팅 기록이 삭제됩니다.",
+  "account.deleting": {
+    en: "Deleting…",
+    ko: "삭제 중…",
+  },
+  "account.delete_failed": {
+    en: "Couldn't delete your account. Check your connection and try again.",
+    ko: "계정을 삭제하지 못했어요. 연결을 확인하고 다시 시도해 주세요.",
+  },
+  "account.delete_offline": {
+    en: "Deleting your account needs a connection",
+    ko: "계정 삭제는 인터넷이 필요해요",
   },
   "account.delete_data_note": {
     en: "Data deleted includes: your profile, all saved people, meeting logs, notes, family members, and calendar connections.",
@@ -355,8 +363,8 @@ const keys: Translations = {
   },
   "privacy.deletion.title": { en: "Account deletion", ko: "계정 삭제" },
   "privacy.deletion.body": {
-    en: "You can request deletion of your account and all associated data at any time by visiting your Account page in the app and following the deletion instructions. All data is permanently removed within 30 days.",
-    ko: "앱의 계정 페이지에서 언제든지 계정 및 모든 관련 데이터 삭제를 요청할 수 있습니다. 모든 데이터는 30일 이내에 영구적으로 삭제됩니다.",
+    en: "You can permanently delete your account and all associated data at any time from the Account page in the app (\"Delete Account\"). Deletion is immediate: your profile, saved people, meetings, notes, family members, and calendar connections are removed right away, and any connected Google Calendar access is revoked.",
+    ko: "앱의 계정 페이지(\"계정 삭제\")에서 언제든지 계정과 모든 관련 데이터를 영구적으로 삭제할 수 있습니다. 삭제는 즉시 이루어지며 프로필, 저장된 사람, 미팅, 메모, 가족 구성원, 캘린더 연결이 바로 제거되고 연결된 Google 캘린더 접근 권한도 해제됩니다.",
   },
   "privacy.contact.title": { en: "Contact", ko: "연락처" },
   "privacy.contact.body": {

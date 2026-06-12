@@ -116,6 +116,26 @@ export async function outboxCount(): Promise<number> {
   }
 }
 
+// Wipe every local store (people, outbox, meta). Used on account deletion so
+// no personal data survives on the device after the server copy is gone.
+export async function clearOfflineData(): Promise<void> {
+  const dbp = getDB();
+  if (!dbp) return;
+  try {
+    const db = await dbp;
+    const tx = db.transaction([PEOPLE, OUTBOX, META], "readwrite");
+    await Promise.all([
+      tx.objectStore(PEOPLE).clear(),
+      tx.objectStore(OUTBOX).clear(),
+      tx.objectStore(META).clear(),
+    ]);
+    await tx.done;
+    notifyOfflineChange();
+  } catch (e) {
+    console.warn("[offline] clearOfflineData failed:", e);
+  }
+}
+
 // Person IDs that have queued (un-synced) writes, derived from outbox URLs
 // (/api/people/{id}…). A server snapshot must never overwrite these, or we'd
 // lose an optimistic local edit before it replays.
