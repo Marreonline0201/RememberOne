@@ -32,22 +32,27 @@ export async function POST() {
       .select("access_token, refresh_token")
       .eq("user_id", user.id);
 
-    for (const conn of connections ?? []) {
-      let token: string | null = null;
+    // Revoking the refresh token kills the whole grant; fall back to the
+    // access token for rows that never stored one. Each decrypt gets its own
+    // try/catch so one corrupt blob doesn't skip a usable fallback.
+    const tryDecrypt = (blob: string | null): string | null => {
       try {
-        // Revoking the refresh token kills the whole grant; fall back to the
-        // access token for rows that never stored one.
-        token =
-          decryptTokenOptional(conn.refresh_token) ??
-          decryptTokenOptional(conn.access_token);
+        return decryptTokenOptional(blob);
       } catch {
-        continue; // corrupt/legacy blob — nothing to revoke
+        return null;
       }
+    };
+    for (const conn of connections ?? []) {
+      const token =
+        tryDecrypt(conn.refresh_token) ?? tryDecrypt(conn.access_token);
       if (!token) continue;
       await fetch("https://oauth2.googleapis.com/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ token }),
+        // A hung revoke must never eat the function time limit and block the
+        // deletion itself — that would invert the "best-effort" intent.
+        signal: AbortSignal.timeout(5000),
       }).catch(() => {});
     }
   } catch {
