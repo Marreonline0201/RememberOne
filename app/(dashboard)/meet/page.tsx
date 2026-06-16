@@ -6,6 +6,7 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
 import { MeetClient } from "@/components/MeetClient";
+import RememberOneLoader from "@/components/RememberOneLoader";
 
 export const metadata: Metadata = {
   title: "Log a Meeting — RememberOne",
@@ -14,7 +15,10 @@ export const metadata: Metadata = {
 export default function MeetPage() {
   return (
     <div className="w-full max-w-lg mx-auto">
-      <Suspense>
+      {/* MeetClient reads ?personId via useSearchParams, which suspends. Without a
+          fallback the content area renders null (blank) until it resolves — give
+          it the same loader the dashboard uses so the screen is never empty. */}
+      <Suspense fallback={<RememberOneLoader />}>
         <MeetClient />
       </Suspense>
     </div>

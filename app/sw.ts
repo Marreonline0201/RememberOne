@@ -63,28 +63,34 @@ const pageExpiration = () => [
 ];
 
 const navigationCaching: RuntimeCaching[] = [
-  // 1. App Router RSC navigation. Next sends three RSC request shapes per route:
-  //    a FULL-page prefetch (RSC=1, Next-Router-Prefetch=1), a real NAVIGATION
-  //    (RSC=1, no prefetch), and a tiny SEGMENT-tree prefetch
-  //    (Next-Router-Segment-Prefetch present, ~300B — NOT the full page). We
-  //    cache only the full ones (segment prefetches are excluded by the matcher)
-  //    in ONE cache, so a route warmed online is served on an offline tap —
-  //    that's what lets person/account/meet open with no network.
+  // 1. App Router RSC navigation. Next sends several RSC request shapes per
+  //    route: a real NAVIGATION (RSC=1, no prefetch header — the FULL render), a
+  //    FULL-page prefetch (RSC=1, Next-Router-Prefetch=1 — which for a route
+  //    with a loading.tsx is only the PARTIAL loading shell), and a tiny
+  //    SEGMENT-tree prefetch (Next-Router-Segment-Prefetch present, ~300B). We
+  //    cache ONLY real navigations (and the offline warmer, which fetches with a
+  //    bare RSC=1 header and no prefetch header — see lib/offline-warm.ts), so a
+  //    route opened/warmed online is served on an offline tap. Both prefetch
+  //    shapes are EXCLUDED: a prefetch can be a partial loading shell, and with
+  //    ignoreVary below it would otherwise be handed back on a real navigation as
+  //    a blank/never-resolving content area (the intermittent "white screen on
+  //    screen change"). They're a perf hint Next keeps in its own router cache
+  //    anyway; not caching them in the SW costs nothing.
   //
   //    matchOptions ignoreSearch+ignoreVary are REQUIRED, not cosmetic: a real
   //    navigation's URL carries a different `_rsc` token and its router headers
-  //    differ from the cached prefetch, and RSC responses `Vary` on those headers
+  //    differ between requests, and RSC responses `Vary` on those headers
   //    (rsc, next-router-state-tree, next-router-prefetch, …) — so an exact match
   //    MISSES offline (verified at the Cache API layer: only ignoreSearch+
   //    ignoreVary hits). Ignoring both serves the path's cached full render for
-  //    any RSC request to it. Safe ONLY because segment-tree partials never enter
-  //    this cache — otherwise ignoreVary could hand back a ~300B loading shell
-  //    that never resolves offline.
+  //    any RSC request to it. Safe ONLY because no prefetch/partial ever enters
+  //    this cache — otherwise ignoreVary could hand back a partial shell.
   {
     matcher: ({ request, url: { pathname }, sameOrigin }) =>
       sameOrigin &&
       !pathname.startsWith("/api/") &&
       request.headers.get("RSC") === "1" &&
+      !request.headers.has("Next-Router-Prefetch") &&
       !request.headers.has("Next-Router-Segment-Prefetch"),
     handler: new StaleWhileRevalidate({
       // Per-build name (see buildRev): a new deploy starts fresh so a stale
