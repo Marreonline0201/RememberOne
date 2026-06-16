@@ -36,6 +36,7 @@
 /.claude/
 /.remember/
 /.vercel/
+/.playwright-mcp/
 
 # ---- Internal docs & changelogs (kept private) ----
 /SETUP.md
