@@ -567,9 +567,56 @@ export function AccountPage() {
         )}
       </div>
 
+      {/* Policy */}
+      <div
+        className="rounded-[10px_2px_10px_2px] border overflow-hidden"
+        style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}
+      >
+        <button
+          onClick={() => setPolicyOpen((o) => !o)}
+          className="flex items-center justify-between w-full h-11 px-4 text-sm transition-opacity active:opacity-80"
+          style={{ color: "#284e72" }}
+        >
+          <span className="flex items-center gap-3">
+            <ScrollText className="w-4 h-4 shrink-0" />
+            {t("account.policy")}
+          </span>
+          {policyOpen ? (
+            <ChevronUp className="w-4 h-4 shrink-0" />
+          ) : (
+            <ChevronDown className="w-4 h-4 shrink-0" />
+          )}
+        </button>
+
+        {policyOpen && (
+          <div
+            className="border-t px-4 py-3 space-y-2"
+            style={{ borderColor: "#dccaff" }}
+          >
+            <Link
+              href="/privacy"
+              className="flex items-center gap-3 w-full h-10 px-3 rounded-[8px_2px_8px_2px] text-sm border transition-opacity active:opacity-80"
+              style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              {t("account.privacy_policy")}
+            </Link>
+            <Link
+              href="/child-safety"
+              className="flex items-center gap-3 w-full h-10 px-3 rounded-[8px_2px_8px_2px] text-sm border transition-opacity active:opacity-80"
+              style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+            >
+              <Baby className="w-4 h-4 shrink-0" />
+              {t("account.child_safety")}
+            </Link>
+          </div>
+        )}
+      </div>
+
       {/* Account deletion — in-app and immediate (App Store guideline 5.1.1(v)
           and Play's data-deletion policy both require the user to be able to
-          initiate full deletion from inside the app, not via email). */}
+          initiate full deletion from inside the app, not via email).
+          Placed last so the destructive action sits at the bottom of the page. */}
       <div
         className="p-4 rounded-[10px_2px_10px_2px]"
         style={{ backgroundColor: "#fdf3f2", border: "1px solid #f3cdc9" }}
@@ -667,52 +714,6 @@ export function AccountPage() {
             </p>
           )}
         </div>
-      </div>
-
-      {/* Policy */}
-      <div
-        className="rounded-[10px_2px_10px_2px] border overflow-hidden"
-        style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}
-      >
-        <button
-          onClick={() => setPolicyOpen((o) => !o)}
-          className="flex items-center justify-between w-full h-11 px-4 text-sm transition-opacity active:opacity-80"
-          style={{ color: "#284e72" }}
-        >
-          <span className="flex items-center gap-3">
-            <ScrollText className="w-4 h-4 shrink-0" />
-            {t("account.policy")}
-          </span>
-          {policyOpen ? (
-            <ChevronUp className="w-4 h-4 shrink-0" />
-          ) : (
-            <ChevronDown className="w-4 h-4 shrink-0" />
-          )}
-        </button>
-
-        {policyOpen && (
-          <div
-            className="border-t px-4 py-3 space-y-2"
-            style={{ borderColor: "#dccaff" }}
-          >
-            <Link
-              href="/privacy"
-              className="flex items-center gap-3 w-full h-10 px-3 rounded-[8px_2px_8px_2px] text-sm border transition-opacity active:opacity-80"
-              style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
-            >
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              {t("account.privacy_policy")}
-            </Link>
-            <Link
-              href="/child-safety"
-              className="flex items-center gap-3 w-full h-10 px-3 rounded-[8px_2px_8px_2px] text-sm border transition-opacity active:opacity-80"
-              style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
-            >
-              <Baby className="w-4 h-4 shrink-0" />
-              {t("account.child_safety")}
-            </Link>
-          </div>
-        )}
       </div>
 
     </div>
