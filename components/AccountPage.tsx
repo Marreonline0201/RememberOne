@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { clearNativeSession } from "@/lib/native-auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
-import { LogOut, Loader2, Trash2, Mail, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink, WifiOff } from "lucide-react";
+import { LogOut, Loader2, Trash2, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -23,6 +23,7 @@ import {
   getCachedProfile,
   getCachedConnectionFlag,
   subscribeOffline,
+  clearOfflineData,
   type CachedProfile,
 } from "@/lib/offline-cache";
 import { languages, type LanguageCode } from "@/lib/i18n";
@@ -42,6 +43,9 @@ export function AccountPage() {
   const { language, setLanguage, t } = useLanguage();
   const { timezone, mode: tzMode, value: tzValue, setMode: setTzMode, setTimezone } = useTimezone();
   const [signingOut, setSigningOut] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const [policyOpen, setPolicyOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [savingLang, setSavingLang] = useState(false);
@@ -138,6 +142,38 @@ export function AccountPage() {
     await clearNativeSession();
     router.push("/login");
     router.refresh();
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    setDeleteFailed(false);
+    try {
+      const res = await fetch("/api/account/delete", { method: "POST" });
+      if (!res.ok) throw new Error(`delete failed (${res.status})`);
+      // The server account is gone — remove every local trace before leaving.
+      try {
+        await clearOfflineData();
+      } catch {
+        /* best-effort */
+      }
+      try {
+        await clearNativeSession();
+      } catch {
+        /* best-effort */
+      }
+      // Local-only sign-out: the default (global) variant calls the server
+      // with a session that no longer exists and would error.
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch {
+        /* ignore */
+      }
+      router.push("/login");
+      router.refresh();
+    } catch {
+      setDeleting(false);
+      setDeleteFailed(true);
+    }
   }
 
   return (
@@ -531,62 +567,105 @@ export function AccountPage() {
         )}
       </div>
 
-      {/* Account deletion */}
+      {/* Account deletion — in-app and immediate (App Store guideline 5.1.1(v)
+          and Play's data-deletion policy both require the user to be able to
+          initiate full deletion from inside the app, not via email). */}
       <div
         className="p-4 rounded-[10px_2px_10px_2px]"
-        style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+        style={{ backgroundColor: "#fdf3f2", border: "1px solid #f3cdc9" }}
       >
         <p
           className="text-[13px] uppercase mb-3"
-          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+          style={{ color: "#9c4238", fontFamily: "'Hammersmith One', sans-serif" }}
         >
           {t("account.delete_account")}
         </p>
 
-        <div className="space-y-3 text-sm" style={{ color: "#284e72" }}>
-          <p className="leading-relaxed text-[13px]" style={{ color: "#5e7983" }}>
+        <div className="space-y-3 text-sm">
+          <p className="leading-relaxed text-[13px]" style={{ color: "#7a544e" }}>
             {t("account.delete_description")}
           </p>
 
-          <ol className="space-y-2.5">
-            {([
-              t("account.delete_step1"),
-              t("account.delete_step2"),
-              t("account.delete_step3"),
-              t("account.delete_step4"),
-              t("account.delete_step5"),
-            ]).map((step, i) => (
-              <li key={i} className="flex gap-3 text-[13px]" style={{ color: "#5e7983" }}>
-                <span
-                  className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white mt-0.5"
-                  style={{ backgroundColor: "#284e72" }}
-                >
-                  {i + 1}
-                </span>
-                {step}
-              </li>
-            ))}
-          </ol>
-
-          <a
-            href="mailto:comgamemarre@gmail.com"
-            className="flex items-center gap-2 mt-3 h-11 px-4 rounded-[8px_2px_8px_2px] text-sm font-medium border transition-opacity active:opacity-80"
-            style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+          <div
+            className="flex items-start gap-2 p-3 rounded-lg"
+            style={{ backgroundColor: "rgba(243,205,201,0.35)" }}
           >
-            <Mail className="w-4 h-4" />
-            comgamemarre@gmail.com
-          </a>
+            <Trash2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "#9c4238" }} />
+            <p className="text-[12px]" style={{ color: "#9c4238" }}>
+              {t("account.delete_data_note")}
+            </p>
+          </div>
 
-          <p className="text-[11px] pt-1" style={{ color: "#5e7983" }}>
-            {t("account.delete_note")}
-          </p>
-        </div>
+          {!confirmingDelete ? (
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmingDelete(true);
+                setDeleteFailed(false);
+              }}
+              disabled={!online}
+              className="flex items-center justify-center gap-2 w-full h-11 rounded-[8px_2px_8px_2px] text-sm font-medium border transition-opacity active:opacity-80 disabled:opacity-60"
+              style={{ borderColor: "#e7a39b", color: "#b42318", backgroundColor: "white" }}
+            >
+              <Trash2 className="w-4 h-4" />
+              {t("account.delete_button")}
+            </button>
+          ) : (
+            <div
+              className="space-y-3 p-3 rounded-[8px_2px_8px_2px] border"
+              style={{ borderColor: "#e7a39b", backgroundColor: "white" }}
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "#b42318" }} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: "#b42318" }}>
+                    {t("account.delete_confirm_title")}
+                  </p>
+                  <p className="text-[12px] mt-1 leading-relaxed" style={{ color: "#7a544e" }}>
+                    {t("account.delete_confirm_body")}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                  className="flex-1 h-10 rounded-[8px_2px_8px_2px] text-sm font-medium border transition-opacity active:opacity-80 disabled:opacity-60"
+                  style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+                >
+                  {t("account.delete_cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  disabled={deleting || !online}
+                  className="flex-1 flex items-center justify-center gap-2 h-10 rounded-[8px_2px_8px_2px] text-sm font-medium text-white transition-opacity active:opacity-80 disabled:opacity-60"
+                  style={{ backgroundColor: "#b42318" }}
+                >
+                  {deleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  {deleting ? t("account.deleting") : t("account.delete_confirm_yes")}
+                </button>
+              </div>
+            </div>
+          )}
 
-        <div className="mt-4 flex items-start gap-2 p-3 rounded-lg" style={{ backgroundColor: "rgba(220,202,255,0.4)" }}>
-          <Trash2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "#665b7b" }} />
-          <p className="text-[12px]" style={{ color: "#665b7b" }}>
-            {t("account.delete_data_note")}
-          </p>
+          {deleteFailed && (
+            <p className="text-[12px]" style={{ color: "#b42318" }}>
+              {t("account.delete_failed")}
+            </p>
+          )}
+
+          {!online && (
+            <p className="flex items-center gap-2 text-[12px]" style={{ color: "#5e7983" }}>
+              <WifiOff className="w-3.5 h-3.5 shrink-0" />
+              {t("account.delete_offline")}
+            </p>
+          )}
         </div>
       </div>
 
