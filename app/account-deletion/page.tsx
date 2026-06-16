@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { LanguageCode } from "@/lib/i18n";
+import { BackButton } from "@/components/BackButton";
 
 export const metadata = {
   title: "Delete your account — RememberOne",
@@ -37,12 +38,7 @@ export default async function AccountDeletionPage() {
     <main className="min-h-screen bg-background px-5 py-10 md:py-16">
       <div className="max-w-2xl mx-auto space-y-8">
         <header className="space-y-3">
-          <Link
-            href="/"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← RememberOne
-          </Link>
+          <BackButton fallbackHref="/" label={content.back} />
           <h1 className="text-3xl font-semibold tracking-tight">
             {content.title}
           </h1>
@@ -114,6 +110,7 @@ function renderStep(parts: Step) {
 function getContent(lang: LanguageCode) {
   if (lang === "ko") {
     return {
+      back: "뒤로",
       title: "계정 삭제 요청",
       intro:
         "RememberOne 계정과 이에 연결된 모든 데이터는 언제든지 삭제할 수 있습니다. 삭제는 영구적이며, 완료 후 30일 이내에 모든 백업에서 제거됩니다.",
@@ -144,6 +141,7 @@ function getContent(lang: LanguageCode) {
     };
   }
   return {
+    back: "Back",
     title: "Delete your account",
     intro:
       "You can permanently delete your RememberOne account and every piece of data associated with it at any time. Deletion is irreversible, and the data is purged from all backups within 30 days.",

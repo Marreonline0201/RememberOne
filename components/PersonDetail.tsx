@@ -8,7 +8,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mic } from "lucide-react";
+import { Mic } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
 import type { PersonFull } from "@/types/app";
 import {
   getCachedPerson,
@@ -125,15 +126,9 @@ export function PersonDetail({ id }: { id: string }) {
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-5">
-      {/* Back — desktop only */}
-      <Link
-        href="/"
-        className="hidden md:inline-flex items-center gap-1 text-sm transition-opacity hover:opacity-70"
-        style={{ color: "#284e72" }}
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <T k="person.back" />
-      </Link>
+      {/* Back — visible on every viewport (mobile previously relied on the
+          system/gesture back button). Returns to wherever the user came from. */}
+      <BackButton fallbackHref="/" />
 
       {/* ── Person header ───────────────────────────────────────────────── */}
       <div

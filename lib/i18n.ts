@@ -22,6 +22,11 @@ export function getLanguage(code: string): Language {
 type Translations = Record<string, Record<LanguageCode, string>>;
 
 const keys: Translations = {
+  // Common
+  "common.back": {
+    en: "Back",
+    ko: "뒤로",
+  },
   // Language picker
   "lang.choose_title": {
     en: "Choose Your Language",

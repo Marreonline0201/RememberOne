@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { translate, type LanguageCode } from "@/lib/i18n";
+import { BackButton } from "@/components/BackButton";
 
 export const metadata = { title: "Privacy Policy — RememberOne" };
 
@@ -30,13 +30,7 @@ export default async function PrivacyPolicy() {
   return (
     <div className="min-h-screen px-5 py-10" style={{ backgroundColor: "#fbf6ff" }}>
       <div className="max-w-lg mx-auto space-y-6">
-        <Link
-          href="/"
-          className="block text-[13px] uppercase tracking-wide"
-          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
-        >
-          ← RememberOne
-        </Link>
+        <BackButton fallbackHref="/" label={t("common.back")} />
         <div>
           <h1
             className="text-[28px] uppercase text-black"
