@@ -224,14 +224,14 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         {/* Branding */}
         <div className="flex flex-col items-center gap-2 text-center">
-          {/* Brand logo — served from /public */}
-          <div className="flex items-center justify-center w-16 h-16 rounded-2xl shadow-md bg-white border border-gray-100">
-            <img
-              src="/logo.png"
-              alt="RememberOne logo"
-              className="w-12 h-12 object-contain"
-            />
-          </div>
+          {/* Brand logo — the PNG is already a self-contained rounded app icon
+              (its own dark tile background), so render it directly. Nesting it
+              in a white card made it read as a black square on white. */}
+          <img
+            src="/logo.png"
+            alt="RememberOne logo"
+            className="w-16 h-16 rounded-2xl shadow-md"
+          />
           <h1 className="text-2xl font-normal text-black uppercase tracking-wider" style={{ fontFamily: "'Hammersmith One', sans-serif" }}>RememberOne</h1>
           <p className="text-sm text-muted-foreground">
             Never forget a person you meet
