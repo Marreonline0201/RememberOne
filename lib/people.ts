@@ -155,7 +155,11 @@ export async function saveExtractionResult(
   supabase: SupabaseClient,
   userId: string,
   extraction: AIExtractionResult,
-  rawInput: string
+  rawInput: string,
+  // When false, the person + attributes are still saved but NO meeting row is
+  // inserted. Used by the typed flow's name-only case so saving "just a name"
+  // doesn't create an empty ghost meeting. Defaults to true (voice/extract path).
+  logMeeting: boolean = true
 ): Promise<string[]> {
   const personIds: string[] = [];
 
@@ -266,14 +270,16 @@ export async function saveExtractionResult(
     }
 
     // 4. Insert a meeting log
-    await supabase.from("meetings").insert({
-      user_id: userId,
-      person_id: personId,
-      raw_input: rawInput,
-      meeting_date: extraction.meeting_date ?? new Date().toISOString().split("T")[0],
-      location: extraction.location,
-      summary: extracted.summary,
-    });
+    if (logMeeting) {
+      await supabase.from("meetings").insert({
+        user_id: userId,
+        person_id: personId,
+        raw_input: rawInput,
+        meeting_date: extraction.meeting_date ?? new Date().toISOString().split("T")[0],
+        location: extraction.location,
+        summary: extracted.summary,
+      });
+    }
   }
 
   return personIds;

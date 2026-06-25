@@ -25,7 +25,6 @@ import {
   Users,
   Mic,
   MicOff,
-  CheckCircle2,
   X,
   ArrowLeft,
   Loader2,
@@ -35,6 +34,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
 import { localizeKey, cn } from "@/lib/utils";
 import { useOnline } from "@/lib/use-online";
+import { MeetModeToggle } from "@/components/MeetModeToggle";
+import { AiLoadingState } from "@/components/AiLoadingState";
+import { AiSuccessState } from "@/components/AiSuccessState";
 
 type Step = "input" | "loading" | "success" | "preview";
 
@@ -597,54 +599,16 @@ export function ConversationInput({ personId, personName }: Props) {
   // ── LOADING ─────────────────────────────────────────────────────────────
   if (step === "loading") {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-6">
-        <div className="relative flex items-center justify-center">
-          <span
-            className="absolute w-28 h-28 rounded-full opacity-20 animate-ping"
-            style={{ backgroundColor: "#dccaff" }}
-          />
-          <span
-            className="absolute w-20 h-20 rounded-full opacity-20 animate-ping"
-            style={{ backgroundColor: "#d0f2ff", animationDelay: "150ms" }}
-          />
-          <div
-            className="relative w-24 h-24 rounded-full flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #00d4f7, #c84b8a, #482d7c)" }}
-          >
-            <Sparkles className="w-10 h-10 text-white" />
-          </div>
-        </div>
-        <p
-          className="text-[18px] uppercase text-black"
-          style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-        >
-          {t("meet.loading_title")}
-        </p>
-        <p className="text-[13px]" style={{ color: "#5e7983" }}>
-          {t("meet.loading_subtitle")}
-        </p>
-      </div>
+      <AiLoadingState
+        title={t("meet.loading_title")}
+        subtitle={t("meet.loading_subtitle")}
+      />
     );
   }
 
   // ── SUCCESS ─────────────────────────────────────────────────────────────
   if (step === "success") {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div
-          className="w-24 h-24 rounded-full flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, #d0f2ff, #dccaff)" }}
-        >
-          <CheckCircle2 className="w-12 h-12" style={{ color: "#284e72" }} />
-        </div>
-        <p
-          className="text-[20px] uppercase text-black"
-          style={{ fontFamily: "'Hammersmith One', sans-serif" }}
-        >
-          {t("meet.saved")}
-        </p>
-      </div>
-    );
+    return <AiSuccessState label={t("meet.saved")} />;
   }
 
   // ── PREVIEW (general mode only) ─────────────────────────────────────────
@@ -740,6 +704,9 @@ export function ConversationInput({ personId, personName }: Props) {
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-200px)]">
+
+      {/* General mode: Speak / Write mode switch */}
+      {!isPerson && <MeetModeToggle active="speak" />}
 
       {/* Person mode: back link + person name banner */}
       {isPerson && (

@@ -338,6 +338,132 @@ const keys: Translations = {
     ko: "정보만 업데이트",
   },
 
+  // Write a person (typed) — /meet/write
+  "write.toggle_speak": {
+    en: "Speak",
+    ko: "말하기",
+  },
+  "write.toggle_write": {
+    en: "Write",
+    ko: "쓰기",
+  },
+  "write.heading": {
+    en: "Write someone down",
+    ko: "직접 적어보기",
+  },
+  "write.subheading": {
+    en: "Type their name, then everything else about them.",
+    ko: "이름을 적고, 그 사람에 대한 모든 것을 적어보세요.",
+  },
+  "write.name_label": {
+    en: "Name",
+    ko: "이름",
+  },
+  "write.name_placeholder": {
+    en: "e.g. Mike Anderson",
+    ko: "예: 정태현",
+  },
+  "write.info_label": {
+    en: "Everything else",
+    ko: "그 외 모든 것",
+  },
+  "write.info_placeholder": {
+    en: "Met him at the conference. He has a son named Jake who is 10 and studies at Stony Brook…",
+    ko: "컨퍼런스에서 만났어요. 10살 아들 김민규가 있고 연세대학교에 다녀요…",
+  },
+  "write.empty_info_hint": {
+    en: "Add a few details so we can organize them — or save with just a name.",
+    ko: "정리할 수 있도록 몇 가지 정보를 적어주세요 — 이름만으로 저장할 수도 있어요.",
+  },
+  "write.organize": {
+    en: "ORGANIZE",
+    ko: "정리하기",
+  },
+  "write.organizing_title": {
+    en: "Organizing your notes...",
+    ko: "정보를 정리하고 있어요...",
+  },
+  "write.organizing_subtitle": {
+    en: "Sorting into details, family, and a summary.",
+    ko: "속성, 가족, 요약으로 정리하고 있어요.",
+  },
+  "write.review_heading": {
+    en: "Review before saving",
+    ko: "저장하기 전에 확인하세요",
+  },
+  "write.review_subheading": {
+    en: "Nothing is saved yet. Edit anything, then save.",
+    ko: "아직 저장되지 않았어요. 수정한 뒤 저장하세요.",
+  },
+  "write.details_label": {
+    en: "Details",
+    ko: "정보",
+  },
+  "write.family_label": {
+    en: "Family",
+    ko: "가족",
+  },
+  "write.summary_label": {
+    en: "Summary",
+    ko: "요약",
+  },
+  "write.add_detail": {
+    en: "Add detail",
+    ko: "정보 추가",
+  },
+  "write.add_family": {
+    en: "Add family member",
+    ko: "가족 추가",
+  },
+  "write.remove": {
+    en: "Remove",
+    ko: "제거",
+  },
+  "write.attr_key_placeholder": {
+    en: "Label (e.g. Job)",
+    ko: "항목 (예: 직업)",
+  },
+  "write.attr_value_placeholder": {
+    en: "Value",
+    ko: "내용",
+  },
+  "write.fm_name_placeholder": {
+    en: "Name",
+    ko: "이름",
+  },
+  "write.fm_relation_placeholder": {
+    en: "Relation (e.g. son)",
+    ko: "관계 (예: 아들)",
+  },
+  "write.save": {
+    en: "SAVE",
+    ko: "저장하기",
+  },
+  "write.saving_title": {
+    en: "Saving...",
+    ko: "저장하고 있어요...",
+  },
+  "write.back_to_edit": {
+    en: "BACK TO EDIT",
+    ko: "수정하러 가기",
+  },
+  "write.offline_hint": {
+    en: "You're offline — connect to organize.",
+    ko: "오프라인이에요 — 연결하면 정리할 수 있어요.",
+  },
+  "write.organize_failed": {
+    en: "Couldn't organize your notes",
+    ko: "정보를 정리하지 못했어요",
+  },
+  "write.rate_limited": {
+    en: "You've hit the limit — wait a moment and try again.",
+    ko: "요청이 많아요 — 잠시 후 다시 시도해 주세요.",
+  },
+  "write.save_failed": {
+    en: "Couldn't save",
+    ko: "저장하지 못했어요",
+  },
+
   // Privacy Policy page
   "privacy.title": { en: "Privacy Policy", ko: "개인정보 처리방침" },
   "privacy.updated": { en: "Last updated: March 2026", ko: "최종 업데이트: 2026년 3월" },
