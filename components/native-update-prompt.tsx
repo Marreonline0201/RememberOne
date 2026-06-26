@@ -17,7 +17,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 //   2. Wait for it to ROLL OUT on Play Store (production/your track)
 //   3. THEN bump this constant and push the JS change to Vercel
 // Keep in sync with android/app/build.gradle but only AFTER step 2.
-const MIN_BUILD = 14;
+const MIN_BUILD = 15;
 
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.rememberone.app";
