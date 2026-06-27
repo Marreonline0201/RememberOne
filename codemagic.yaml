@@ -90,7 +90,11 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration                # use the stored App Store Connect API key
-        submit_to_testflight: true        # auto-distribute to TestFlight after upload
+        # The build UPLOADS to App Store Connect and is immediately available for
+        # INTERNAL TestFlight testing (no review). We deliberately do NOT set
+        # submit_to_testflight: that submits for EXTERNAL beta review, which fails
+        # until "Beta App Review Information" + a Feedback Email are filled in.
+        # Add `submit_to_testflight: true` back only when you want external testers.
       email:
         recipients:
           - ddogroundonline@gmail.com
