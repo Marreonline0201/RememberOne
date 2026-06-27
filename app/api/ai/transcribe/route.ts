@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { transcribeAudio } from "@/lib/gemini";
 import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { hasAiConsent, consentRequiredResponse } from "@/lib/ai-consent";
 
 // 5 MB ≈ 8 minutes of Opus-encoded WebM. Comfortably above the 60-second cap
 // the client enforces, with room for higher-bitrate codecs.
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+
+    // 1a. AI consent gate (5.1.2(i)) — block before audio is sent to Gemini.
+    if (!hasAiConsent(user)) return consentRequiredResponse();
 
     // 2. Rate limit (shares the same per-user sliding window as /api/ai/extract)
     const rl = await consumeAIRateLimit(supabase);

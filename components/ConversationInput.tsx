@@ -37,6 +37,7 @@ import { useOnline } from "@/lib/use-online";
 import { MeetModeToggle } from "@/components/MeetModeToggle";
 import { AiLoadingState } from "@/components/AiLoadingState";
 import { AiSuccessState } from "@/components/AiSuccessState";
+import { useAiConsent } from "@/components/AiConsentProvider";
 
 type Step = "input" | "loading" | "success" | "preview";
 
@@ -78,6 +79,7 @@ export function ConversationInput({ personId, personName }: Props) {
   const speechLocale = getLanguage(language).locale;
   const ko = language === "ko";
   const online = useOnline();
+  const { ensureConsent } = useAiConsent();
 
   // person-specific mode
   const isPerson = !!(personId && personName);
@@ -453,6 +455,11 @@ export function ConversationInput({ personId, personName }: Props) {
         body: form,
       });
       const json = await res.json();
+      if (res.status === 403 && json?.error === "consent_required") {
+        // Consent was revoked elsewhere — re-prompt rather than show a raw error.
+        void ensureConsent(true);
+        return;
+      }
       if (!res.ok || json.error) {
         throw new Error(json.error ?? "Transcription failed");
       }
@@ -507,10 +514,15 @@ export function ConversationInput({ personId, personName }: Props) {
     }
   }
 
-  function toggleVoice() {
+  async function toggleVoice() {
     if (!online) return; // logging needs the network; mic is disabled offline
-    if (recording) stopRecording();
-    else void startRecording();
+    if (recording) {
+      stopRecording();
+      return;
+    }
+    // Recording sends audio to Gemini for transcription — gate on AI consent.
+    if (!(await ensureConsent())) return;
+    void startRecording();
   }
 
   // ── Submit: person mode uses notes API; general mode uses extract API ────
@@ -536,6 +548,9 @@ export function ConversationInput({ personId, personName }: Props) {
     const fullText = text.trim();
     if (!fullText) return;
 
+    // Submitting sends the text to Gemini (extract / notes) — gate on consent.
+    if (!(await ensureConsent())) return;
+
     setStep("loading");
 
     try {
@@ -546,6 +561,11 @@ export function ConversationInput({ personId, personName }: Props) {
           body: JSON.stringify({ text: fullText, logMeeting }),
         });
         const json = await res.json();
+        if (res.status === 403 && json.error === "consent_required") {
+          setStep("input");
+          void ensureConsent(true);
+          return;
+        }
         if (!res.ok || json.error)
           throw new Error(json.error ?? t("meet.extraction_failed"));
 
@@ -561,6 +581,11 @@ export function ConversationInput({ personId, personName }: Props) {
           body: JSON.stringify({ text: fullText }),
         });
         const json = await res.json();
+        if (res.status === 403 && json.error === "consent_required") {
+          setStep("input");
+          void ensureConsent(true);
+          return;
+        }
         if (!res.ok || json.error)
           throw new Error(json.error ?? t("meet.extraction_failed"));
 

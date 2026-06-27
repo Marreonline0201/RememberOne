@@ -12,6 +12,7 @@ import { Loader2, Mic, MicOff, Plus, Sparkles, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { useAiConsent } from "@/components/AiConsentProvider";
 
 interface Props {
   personId: string;
@@ -23,6 +24,7 @@ export function AddNotesInput({ personId, personName }: Props) {
   const { toast } = useToast();
   const { language, t } = useLanguage();
   const speechLocale = getLanguage(language).locale;
+  const { ensureConsent } = useAiConsent();
 
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -85,6 +87,9 @@ export function AddNotesInput({ personId, personName }: Props) {
     e.preventDefault();
     if (!text.trim() || loading) return;
 
+    // Sends the notes to Gemini for extraction — gate on AI consent.
+    if (!(await ensureConsent())) return;
+
     setLoading(true);
     try {
       const res = await fetch(`/api/people/${personId}/notes`, {
@@ -95,6 +100,11 @@ export function AddNotesInput({ personId, personName }: Props) {
 
       const json = await res.json();
 
+      if (res.status === 403 && json?.error === "consent_required") {
+        // Consent was revoked elsewhere — re-prompt instead of a raw error.
+        void ensureConsent(true);
+        return;
+      }
       if (!res.ok || json.error) {
         throw new Error(json.error ?? "Failed to analyze notes");
       }

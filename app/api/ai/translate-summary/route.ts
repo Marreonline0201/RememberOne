@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { translateSummary } from "@/lib/gemini";
 import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { hasAiConsent, consentRequiredResponse } from "@/lib/ai-consent";
 
 export async function POST(request: Request) {
   try {
@@ -23,6 +24,10 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+
+    // 1a. AI consent gate (5.1.2(i)). Fires on a language toggle, so the client
+    // treats a 403 here as "skip translation" rather than popping the modal.
+    if (!hasAiConsent(user)) return consentRequiredResponse();
 
     // 2. Rate limit (shared per-user bucket)
     const rl = await consumeAIRateLimit(supabase);

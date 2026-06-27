@@ -6,10 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 import { clearNativeSession } from "@/lib/native-auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
-import { LogOut, Loader2, Trash2, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink, WifiOff } from "lucide-react";
+import { LogOut, Loader2, Trash2, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink, WifiOff, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
+import { useToast } from "@/components/ui/use-toast";
 import { useOnline } from "@/lib/use-online";
 import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import {
@@ -27,6 +28,7 @@ import {
   type CachedProfile,
 } from "@/lib/offline-cache";
 import { languages, type LanguageCode } from "@/lib/i18n";
+import { useAiConsent } from "@/components/AiConsentProvider";
 
 // Fallback if the WebView lacks Intl.supportedValuesOf (Chrome <99).
 const FALLBACK_ZONES = [
@@ -40,8 +42,11 @@ export function AccountPage() {
   const router = useRouter();
   const supabase = createClient();
   const online = useOnline();
+  const { toast } = useToast();
   const { language, setLanguage, t } = useLanguage();
   const { timezone, mode: tzMode, value: tzValue, setMode: setTzMode, setTimezone } = useTimezone();
+  const { consented: aiConsented, revokeConsent } = useAiConsent();
+  const [revokingConsent, setRevokingConsent] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -610,6 +615,47 @@ export function AccountPage() {
               {t("account.child_safety")}
             </Link>
           </div>
+        )}
+      </div>
+
+      {/* AI processing consent (App Store 5.1.2(i)) — disclosure of the Gemini
+          data flow + the in-app way to withdraw consent that the privacy policy
+          promises. When withdrawn, the AI routes hard-block until re-consented. */}
+      <div
+        className="p-4 rounded-[10px_2px_10px_2px]"
+        style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+      >
+        <p
+          className="text-[13px] uppercase mb-2 flex items-center gap-2"
+          style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+        >
+          <Sparkles className="w-4 h-4 shrink-0" />
+          {t("consent.account_title")}
+        </p>
+        <p className="text-[12px] leading-relaxed mb-3" style={{ color: "#5e7983" }}>
+          {aiConsented ? t("consent.account_on") : t("consent.account_off")}
+        </p>
+        {aiConsented && (
+          <button
+            type="button"
+            onClick={async () => {
+              setRevokingConsent(true);
+              try {
+                await revokeConsent();
+                toast({ title: t("consent.revoked_toast") });
+              } catch {
+                toast({ title: t("meet.something_wrong"), variant: "destructive" });
+              } finally {
+                setRevokingConsent(false);
+              }
+            }}
+            disabled={revokingConsent || !online}
+            className="flex items-center justify-center gap-2 w-full h-10 rounded-[8px_2px_8px_2px] text-sm font-medium border transition-opacity active:opacity-80 disabled:opacity-60"
+            style={{ borderColor: "#dccaff", color: "#284e72", backgroundColor: "white" }}
+          >
+            {revokingConsent && <Loader2 className="w-4 h-4 animate-spin" />}
+            {t("consent.revoke")}
+          </button>
         )}
       </div>
 

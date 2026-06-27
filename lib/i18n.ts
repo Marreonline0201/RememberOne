@@ -464,6 +464,48 @@ const keys: Translations = {
     ko: "저장하지 못했어요",
   },
 
+  // AI consent (Gemini) — App Store 5.1.2(i)
+  "consent.title": {
+    en: "Use AI to organize this?",
+    ko: "AI로 정리할까요?",
+  },
+  "consent.body": {
+    en: "To pull out names and details, RememberOne sends the text you type or speak to Google Gemini, an AI service. It's used only to provide this feature — never to train AI models. You can withdraw this anytime in Account settings.",
+    ko: "이름과 세부 정보를 추출하기 위해, 입력하거나 말한 텍스트를 AI 서비스인 Google Gemini로 전송합니다. 이 기능 제공 목적으로만 사용되며 AI 모델 훈련에는 사용되지 않습니다. 계정 설정에서 언제든지 동의를 철회할 수 있어요.",
+  },
+  "consent.agree": {
+    en: "Agree & continue",
+    ko: "동의하고 계속",
+  },
+  "consent.cancel": {
+    en: "Not now",
+    ko: "나중에",
+  },
+  "consent.learn_more": {
+    en: "Privacy details",
+    ko: "개인정보 안내",
+  },
+  "consent.account_title": {
+    en: "AI processing",
+    ko: "AI 처리",
+  },
+  "consent.account_on": {
+    en: "You've allowed sending your notes to Google Gemini to extract details.",
+    ko: "세부 정보 추출을 위해 메모를 Google Gemini로 전송하는 것에 동의했어요.",
+  },
+  "consent.account_off": {
+    en: "AI features ask for your permission before sending anything to Google Gemini.",
+    ko: "AI 기능은 Google Gemini로 전송하기 전에 동의를 요청합니다.",
+  },
+  "consent.revoke": {
+    en: "Withdraw AI consent",
+    ko: "AI 동의 철회",
+  },
+  "consent.revoked_toast": {
+    en: "AI consent withdrawn",
+    ko: "AI 동의가 철회되었어요",
+  },
+
   // Privacy Policy page
   "privacy.title": { en: "Privacy Policy", ko: "개인정보 처리방침" },
   "privacy.updated": { en: "Last updated: March 2026", ko: "최종 업데이트: 2026년 3월" },
@@ -479,8 +521,8 @@ const keys: Translations = {
   },
   "privacy.ai.title": { en: "AI processing", ko: "AI 처리" },
   "privacy.ai.body": {
-    en: "When you log a meeting, the text you provide is sent to an AI service (Gemini) to extract structured information. This text is processed to provide the service and is not used to train AI models.",
-    ko: "미팅을 기록할 때 입력한 텍스트는 구조화된 정보 추출을 위해 AI 서비스(Gemini)로 전송됩니다. 이 텍스트는 서비스 제공 목적으로만 처리되며 AI 모델 훈련에 사용되지 않습니다.",
+    en: "When you log a meeting, the text you provide is sent to a third-party AI service (Google Gemini) to extract structured information. We ask for your explicit permission before sending anything, and this text is processed only to provide the service — it is not used to train AI models. You can withdraw your consent at any time in Account settings, which turns the AI features off.",
+    ko: "미팅을 기록할 때 입력한 텍스트는 구조화된 정보 추출을 위해 제3자 AI 서비스(Google Gemini)로 전송됩니다. 전송 전에 명시적 동의를 요청하며, 이 텍스트는 서비스 제공 목적으로만 처리되고 AI 모델 훈련에는 사용되지 않습니다. 계정 설정에서 언제든지 동의를 철회할 수 있으며, 철회 시 AI 기능이 꺼집니다.",
   },
   "privacy.calendar.title": { en: "Calendar access", ko: "캘린더 접근" },
   "privacy.calendar.body": {

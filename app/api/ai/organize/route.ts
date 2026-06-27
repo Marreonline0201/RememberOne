@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { extractAdditionalInfo } from "@/lib/gemini";
 import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { hasAiConsent, consentRequiredResponse } from "@/lib/ai-consent";
 import { todayISO } from "@/lib/utils";
 import { z } from "zod";
 
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
     }
+
+    // AI consent gate (5.1.2(i)) — block before notes are sent to Gemini.
+    if (!hasAiConsent(user)) return consentRequiredResponse();
 
     // Validate BEFORE consuming a rate-limit token. This diverges from
     // /api/ai/extract (which rate-limits first) on purpose: an empty-info

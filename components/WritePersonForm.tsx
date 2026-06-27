@@ -18,6 +18,7 @@ import { BackButton } from "@/components/BackButton";
 import { MeetModeToggle } from "@/components/MeetModeToggle";
 import { AiLoadingState } from "@/components/AiLoadingState";
 import { AiSuccessState } from "@/components/AiSuccessState";
+import { useAiConsent } from "@/components/AiConsentProvider";
 import type { AdditionalExtractionResult } from "@/lib/gemini";
 import type { ExtractedAttribute, ExtractedFamilyMember } from "@/types/app";
 
@@ -55,6 +56,7 @@ export function WritePersonForm() {
   const { toast } = useToast();
   const { language, t } = useLanguage();
   const online = useOnline();
+  const { ensureConsent } = useAiConsent();
 
   const [step, setStep] = useState<WriteStep>("form");
   const [name, setName] = useState("");
@@ -100,6 +102,9 @@ export function WritePersonForm() {
       return;
     }
 
+    // The non-empty path sends the notes to Gemini — gate on AI consent.
+    if (!(await ensureConsent())) return;
+
     setStep("organizing");
     try {
       const res = await fetch("/api/ai/organize", {
@@ -116,6 +121,12 @@ export function WritePersonForm() {
           variant: "destructive",
         });
         setStep("form");
+        return;
+      }
+      if (res.status === 403 && json?.error === "consent_required") {
+        // Consent was revoked elsewhere — re-prompt instead of a raw error.
+        setStep("form");
+        void ensureConsent(true);
         return;
       }
       if (!res.ok || json.error) {

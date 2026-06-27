@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getPersonFull } from "@/lib/people";
 import { extractAdditionalInfo } from "@/lib/gemini";
 import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { hasAiConsent, consentRequiredResponse } from "@/lib/ai-consent";
 import { todayISO, isRelationPlaceholder } from "@/lib/utils";
 import { z } from "zod";
 
@@ -31,6 +32,9 @@ export async function POST(request: Request, props: Params) {
     if (!user) {
       return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
     }
+
+    // AI consent gate (5.1.2(i)) — block before notes are sent to Gemini.
+    if (!hasAiConsent(user)) return consentRequiredResponse();
 
     // Rate limit AI calls per-user (shared budget with /api/ai/extract)
     const rl = await consumeAIRateLimit(supabase);
