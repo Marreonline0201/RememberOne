@@ -23,9 +23,12 @@
 /public/sw.js.map
 /public/swe-worker-*.js
 
-# ---- Mobile build scaffolding (regenerate via `npx cap sync`) ----
+# ---- Mobile build scaffolding ----
+# Android is built locally, so it stays ignored.
 /android/
-/ios/
+# iOS is built in the cloud (Codemagic builds from GitHub), so the native iOS
+# project IS committed. ios/.gitignore still excludes Pods/, build artifacts,
+# and the generated capacitor.config.json (Codemagic regenerates those).
 
 # ---- IDE / editor ----
 /.idea/

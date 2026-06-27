@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<!-- Read the device calendar to match upcoming events to saved people.
+	     iOS 17+ requires the FullAccess key to READ events (no read-only tier);
+	     iOS 13-16 uses NSCalendarsUsageDescription. Read-only in practice. -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>RememberOne reads your calendar to match upcoming events to the people you've saved.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>RememberOne reads your calendar to match upcoming events to the people you've saved.</string>
+	<!-- Voice notes: capture the mic and transcribe speech into text. A missing
+	     usage string is a hard crash the moment permission is requested. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>RememberOne uses your microphone so you can speak notes about the people you meet, which are transcribed into text.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>RememberOne uses speech recognition to turn what you say into written notes about the people you meet.</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+        <string>RememberOne</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	<!-- Custom URL scheme so an OAuth (Google/Apple) redirect can return into
+	     the app on iOS, where server-side 302s don't reliably fire Universal
+	     Links. Registered now; wiring the redirect to use it is verified on
+	     device (TestFlight) since it can't be tested from Windows. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.rememberone.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.rememberone.app</string>
+			</array>
+		</dict>
+	</array>
+	<!-- HTTPS-only app → only exempt (standard) encryption. Declaring this skips
+	     the export-compliance question on every TestFlight / App Store upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>
