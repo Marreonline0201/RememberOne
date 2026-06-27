@@ -33,6 +33,7 @@ workflows:
     environment:
       vars:
         BUNDLE_ID: "com.rememberone.app"
+        APPLE_TEAM_ID: "LFJHU84S5S"       # Apple Developer Team ID (for manual archive signing)
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 6784896315   # RememberOne's App Store Connect Apple ID
@@ -68,9 +69,13 @@ workflows:
 
       - name: Build signed IPA
         script: |
+          # Pass the team explicitly so the archive's manual signing can resolve
+          # the provisioning profile (the Capacitor project ships with an empty
+          # DEVELOPMENT_TEAM, which causes "App requires a provisioning profile").
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+            --scheme "$XCODE_SCHEME" \
+            --archive-xcargs "CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=$APPLE_TEAM_ID"
 
     artifacts:
       - build/ios/ipa/*.ipa
