@@ -1,0 +1,80 @@
+# Codemagic CI — builds the iOS app (signed .ipa) in the cloud and uploads it to
+# TestFlight, so it can be built from Windows without a Mac.
+#
+# This is a Capacitor 8 SPM project (ios/App/CapApp-SPM, no Podfile), so we build
+# ios/App/App.xcodeproj directly (scheme "App") — no `pod install`. The app loads
+# its UI from the remote https://rememberone.online (server.url), so the local web
+# bundle (webDir = public/, already in the repo) is just a fallback that `cap sync`
+# copies in — no Next build step is needed for the iOS shell.
+#
+# FIRST-RUN SETUP (do these once, see the chat for button-level steps):
+#   1. App Store Connect -> Users and Access -> Integrations -> App Store Connect
+#      API -> generate a key (role: App Manager). Download the .p8, note Issuer ID
+#      + Key ID.
+#   2. Codemagic -> Teams/personal settings -> Integrations -> Developer Portal ->
+#      add that key. NAME IT "codemagic" so the `integrations:` ref below matches.
+#   3. Fill APP_STORE_APPLE_ID below with the numeric Apple ID of the RememberOne
+#      app record (App Store Connect -> your app -> App Information -> "Apple ID").
+#   4. Make sure the App ID com.rememberone.app has the "Sign In with Apple"
+#      capability enabled (already done) so the auto provisioning profile includes it.
+#
+# Expect to iterate on the first build (signing / scheme specifics are environment-
+# dependent). The Codemagic build log will pinpoint anything to adjust.
+
+workflows:
+  ios-testflight:
+    name: RememberOne iOS — TestFlight
+    instance_type: mac_mini_m2          # free tier: 500 macOS M2 min/month
+    max_build_duration: 60
+
+    integrations:
+      app_store_connect: codemagic       # <-- the API key name you saved in Codemagic
+
+    environment:
+      ios_signing:
+        distribution_type: app_store     # App Store / TestFlight distribution cert + profile
+        bundle_identifier: com.rememberone.app
+      vars:
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+        APP_STORE_APPLE_ID: 0000000000   # <-- replace with your app's numeric Apple ID
+      node: 20
+      xcode: latest
+
+    scripts:
+      - name: Install JS dependencies
+        script: npm ci
+
+      - name: Capacitor sync iOS (regenerates config + copies webDir)
+        script: npx cap sync ios
+
+      - name: Apply fetched provisioning profiles
+        script: xcode-project use-profiles
+
+      - name: Set build number from latest TestFlight build
+        script: |
+          BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          cd ios/App
+          agvtool new-version -all $(($BUILD_NUMBER + 1))
+
+      - name: Build signed IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration                # use the stored App Store Connect API key
+        submit_to_testflight: true        # auto-distribute to TestFlight after upload
+      email:
+        recipients:
+          - ddogroundonline@gmail.com
+        notify:
+          success: true
+          failure: true
