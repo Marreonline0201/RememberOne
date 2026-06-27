@@ -47,16 +47,21 @@ workflows:
       - name: Capacitor sync iOS (regenerates config + copies webDir)
         script: npx cap sync ios
 
-      - name: Set up code signing (creates the cert + App Store profile if missing)
+      - name: Set up code signing (create cert + profile from scratch)
         script: |
           keychain initialize
-          # --create makes the distribution certificate AND App Store provisioning
-          # profile when they don't exist yet (first build for a brand-new app).
-          # Credentials are read from the App Store Connect API key integration's
-          # APP_STORE_CONNECT_* env vars automatically.
+          # A brand-new account has NO distribution certificate. fetch-signing-files
+          # --create needs a private key to create the certificate FROM — without it
+          # no usable cert is produced and use-profiles has nothing to apply (the
+          # "App requires a provisioning profile" archive error). So generate a key;
+          # fetch-signing-files then creates the distribution cert AND the App Store
+          # provisioning profile. API creds come from the App Store Connect API key
+          # integration's APP_STORE_CONNECT_* env vars.
+          ssh-keygen -t rsa -b 2048 -m PEM -f /tmp/sign_key -q -N ""
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --platform IOS \
+            --certificate-key @file:/tmp/sign_key \
             --create
           keychain add-certificates
           xcode-project use-profiles
