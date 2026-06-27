@@ -36,7 +36,7 @@ workflows:
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 6784896315   # RememberOne's App Store Connect Apple ID
-      node: 20
+      node: 22          # Capacitor 8 CLI requires Node >= 22
       xcode: latest
 
     scripts:
