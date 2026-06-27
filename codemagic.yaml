@@ -101,3 +101,58 @@ workflows:
         notify:
           success: true
           failure: true
+
+  # ---------------------------------------------------------------------------
+  # Simulator build for Appetize.io — run the app in a browser, no device and no
+  # code signing required. Run this workflow, download the RememberOne-sim.app.zip
+  # artifact, then upload it at https://appetize.io/upload. Good for UI + Google/
+  # Apple login flows; the browser simulator has no microphone, so the voice
+  # feature can't be exercised here.
+  # ---------------------------------------------------------------------------
+  ios-simulator:
+    name: RememberOne iOS — Simulator (Appetize)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      vars:
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+      node: 22
+      xcode: latest
+
+    scripts:
+      - name: Install JS dependencies
+        script: npm ci
+
+      - name: Capacitor sync iOS (copies webDir + config)
+        script: npx cap sync ios
+
+      - name: Build unsigned app for the iOS Simulator
+        script: |
+          # Simulator builds need no signing/cert. Output lands under
+          # build/Build/Products/Debug-iphonesimulator/App.app
+          xcodebuild build \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Zip the .app for Appetize
+        script: |
+          cd build/Build/Products/Debug-iphonesimulator
+          zip -r "$CM_BUILD_DIR/RememberOne-sim.app.zip" App.app
+
+    artifacts:
+      - RememberOne-sim.app.zip
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      email:
+        recipients:
+          - ddogroundonline@gmail.com
+        notify:
+          success: true
+          failure: true
