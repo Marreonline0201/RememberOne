@@ -37,7 +37,7 @@ workflows:
       vars:
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
-        APP_STORE_APPLE_ID: 0000000000   # <-- replace with your app's numeric Apple ID
+        APP_STORE_APPLE_ID: 6784896315   # RememberOne's App Store Connect Apple ID
       node: 20
       xcode: latest
 
