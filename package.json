@@ -2,6 +2,14 @@
   "name": "remember-one",
   "version": "0.1.0",
   "private": true,
+  "browserslist": [
+    "> 0.3%",
+    "last 2 versions",
+    "iOS >= 15",
+    "Safari >= 15",
+    "Firefox ESR",
+    "not dead"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",

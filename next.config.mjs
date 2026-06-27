@@ -53,6 +53,21 @@ const nextConfig = {
   // All server-only — keeps them out of the bundle (esp. the very large
   // googleapis) and guards against an accidental client import.
   serverExternalPackages: ["@google/generative-ai", "googleapis", "zod"],
+  // Transpile the Supabase client packages. They ship ES2022 class static blocks
+  // (`static { ... }`) that Safari < 16.4 (e.g. iOS 16.2) cannot parse — which
+  // crashes the client bundle on older iOS: React never hydrates, so buttons are
+  // dead while native inputs still accept text. Next skips node_modules by
+  // default; listing these runs them through SWC, downleveled to the browserslist
+  // target (which includes iOS 15), so the syntax is lowered for old WebKit.
+  transpilePackages: [
+    "@supabase/supabase-js",
+    "@supabase/auth-js",
+    "@supabase/storage-js",
+    "@supabase/postgrest-js",
+    "@supabase/realtime-js",
+    "@supabase/functions-js",
+    "@supabase/ssr",
+  ],
   experimental: {
     // Next's default is { dynamic: 0, static: 300 } — with dynamic:0 the client
     // router cache is OFF for dynamic routes, so a prefetched /people/[id] still
