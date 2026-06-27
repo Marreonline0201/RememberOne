@@ -31,10 +31,8 @@ workflows:
       app_store_connect: codemagic       # <-- the API key name you saved in Codemagic
 
     environment:
-      ios_signing:
-        distribution_type: app_store     # App Store / TestFlight distribution cert + profile
-        bundle_identifier: com.rememberone.app
       vars:
+        BUNDLE_ID: "com.rememberone.app"
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 6784896315   # RememberOne's App Store Connect Apple ID
@@ -48,8 +46,19 @@ workflows:
       - name: Capacitor sync iOS (regenerates config + copies webDir)
         script: npx cap sync ios
 
-      - name: Apply fetched provisioning profiles
-        script: xcode-project use-profiles
+      - name: Set up code signing (creates the cert + App Store profile if missing)
+        script: |
+          keychain initialize
+          # --create makes the distribution certificate AND App Store provisioning
+          # profile when they don't exist yet (first build for a brand-new app).
+          # Credentials are read from the App Store Connect API key integration's
+          # APP_STORE_CONNECT_* env vars automatically.
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --platform IOS \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Set build number from latest TestFlight build
         script: |
