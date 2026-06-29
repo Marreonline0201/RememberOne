@@ -69,14 +69,14 @@ const nextConfig = {
     "@supabase/ssr",
   ],
   experimental: {
-    // Next's default is { dynamic: 0, static: 300 } — with dynamic:0 the client
-    // router cache is OFF for dynamic routes, so a prefetched /people/[id] still
-    // does a server roundtrip on tap and shows the full-screen loading.tsx aura.
-    // Caching dynamic segments lets a tapped (prefetched) person open instantly
-    // from the router cache, no roundtrip, no loader. Safe here because the
-    // person route shell is data-free: PersonDetail loads data from IndexedDB and
-    // refreshes from /api on mount, so a cached shell can never show stale data.
-    staleTimes: { dynamic: 300, static: 300 },
+    // Aggressive freshness (user preference): dynamic:0 turns the client router
+    // cache OFF for dynamic routes, so every navigation re-requests instead of
+    // reusing a cached RSC for up to 5 min. Trade-off: a tapped person shows the
+    // loading.tsx aura again (we previously set dynamic:300 to avoid that). The
+    // actual data freshness comes from the per-screen API fetches (PersonDetail +
+    // the home list's /api/people?full=1 on mount), which bypass every cache;
+    // this just stops the shell-level router cache from feeling sticky.
+    staleTimes: { dynamic: 0, static: 180 },
   },
   images: {
     remotePatterns: [

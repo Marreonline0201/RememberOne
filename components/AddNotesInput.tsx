@@ -13,6 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useAiConsent } from "@/components/AiConsentProvider";
+import { cachePerson } from "@/lib/offline-cache";
 
 interface Props {
   personId: string;
@@ -108,6 +109,11 @@ export function AddNotesInput({ personId, personName }: Props) {
       if (!res.ok || json.error) {
         throw new Error(json.error ?? "Failed to analyze notes");
       }
+
+      // Write the updated person into the local store so the detail page (and the
+      // home list, via its cache) reflect the new info instantly — instead of
+      // waiting on router.refresh() which the SW serves stale for a beat.
+      if (json.data?.person) await cachePerson(json.data.person);
 
       const { added } = json.data;
       const parts: string[] = [];

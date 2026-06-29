@@ -3,7 +3,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getAllPeople } from "@/lib/people";
+import { getAllPeople, getAllPeopleFull } from "@/lib/people";
 import { z } from "zod";
 
 const CreatePersonSchema = z.object({
@@ -11,7 +11,7 @@ const CreatePersonSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient();
     const {
@@ -22,7 +22,14 @@ export async function GET() {
       return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
     }
 
-    const people = await getAllPeople(supabase, user.id);
+    // ?full=1 returns the full nested PersonFull[] (attributes/family/meetings),
+    // used by the home list to refresh straight from the API on open — bypassing
+    // the SW + router caches so an edit/new person shows immediately. The default
+    // summary shape is kept for any other caller.
+    const full = new URL(request.url).searchParams.get("full") === "1";
+    const people = full
+      ? await getAllPeopleFull(supabase, user.id)
+      : await getAllPeople(supabase, user.id);
     return NextResponse.json({ data: people, error: null });
   } catch (err: unknown) {
     console.error("[GET /api/people]", err);

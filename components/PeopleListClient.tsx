@@ -1,8 +1,9 @@
 "use client";
 
-// Home people list, rendered from the local store so it works offline and
-// reflects queued edits/deletes instantly. Seeded by the server snapshot
-// (initialPeople) on each online load.
+// Home people list. First paints the server snapshot (initialPeople), then when
+// online refreshes from /api/people?full=1 (which the SW + router caches never
+// touch) so edits/new people show immediately. Offline it renders from the local
+// store and reflects queued edits/deletes instantly.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -15,6 +16,7 @@ import {
   cacheProfile,
   getCachedPeople,
   subscribeOffline,
+  outboxCount,
   type CachedProfile,
 } from "@/lib/offline-cache";
 import type { PersonFull } from "@/types/app";
@@ -49,14 +51,42 @@ export function PeopleListClient({
 
   useEffect(() => {
     let active = true;
-    // Snapshot the server data into the store (skipped if writes are pending).
-    void cachePeople(initialPeople);
 
     const load = async () => {
       const cached = await getCachedPeople();
       if (active && cached.length) setPeople(cached);
     };
-    void load();
+
+    (async () => {
+      const online = typeof navigator === "undefined" ? true : navigator.onLine;
+      // Online with nothing queued: pull the authoritative fresh list straight
+      // from the API (never cached by the SW or the router cache), so an edit or
+      // a newly-created person shows immediately instead of being reseeded from a
+      // stale RSC snapshot. Mirrors PersonDetail's fetch-on-mount. Crucially we do
+      // NOT seed the store from the (possibly stale) initialPeople here — that
+      // clear-and-replace was overwriting fresh optimistic edits.
+      if (online && (await outboxCount()) === 0) {
+        try {
+          const res = await fetch("/api/people?full=1", { cache: "no-store" });
+          if (res.ok) {
+            const { data } = await res.json();
+            if (active && Array.isArray(data)) {
+              setPeople(data as PersonFull[]);
+              await cachePeople(data as PersonFull[]);
+              return;
+            }
+          }
+        } catch {
+          /* offline / network error — fall back to the SSR seed + cache below */
+        }
+      }
+      // Offline (or the refresh failed): seed the store from the SSR snapshot and
+      // render from the cache. cachePeople's pending-aware merge protects
+      // un-synced offline edits from the snapshot.
+      if (!active) return;
+      await cachePeople(initialPeople);
+      await load();
+    })();
 
     const unsub = subscribeOffline(load);
     return () => {

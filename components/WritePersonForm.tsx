@@ -19,6 +19,7 @@ import { MeetModeToggle } from "@/components/MeetModeToggle";
 import { AiLoadingState } from "@/components/AiLoadingState";
 import { AiSuccessState } from "@/components/AiSuccessState";
 import { useAiConsent } from "@/components/AiConsentProvider";
+import { cachePerson } from "@/lib/offline-cache";
 import type { AdditionalExtractionResult } from "@/lib/gemini";
 import type { ExtractedAttribute, ExtractedFamilyMember } from "@/types/app";
 
@@ -184,6 +185,10 @@ export function WritePersonForm() {
       if (!res.ok || json.error) {
         throw new Error(json.error ?? t("write.save_failed"));
       }
+
+      // Cache the newly-created person so it appears in the home list and opens
+      // instantly — instead of relying on a router.refresh() the SW serves stale.
+      if (json.data?.person) await cachePerson(json.data.person);
 
       const personId: string | null = json.data?.personId ?? null;
       setStep("saved");

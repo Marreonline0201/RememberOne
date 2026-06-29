@@ -38,6 +38,7 @@ import { MeetModeToggle } from "@/components/MeetModeToggle";
 import { AiLoadingState } from "@/components/AiLoadingState";
 import { AiSuccessState } from "@/components/AiSuccessState";
 import { useAiConsent } from "@/components/AiConsentProvider";
+import { cachePerson } from "@/lib/offline-cache";
 
 type Step = "input" | "loading" | "success" | "preview";
 
@@ -568,6 +569,10 @@ export function ConversationInput({ personId, personName }: Props) {
         }
         if (!res.ok || json.error)
           throw new Error(json.error ?? t("meet.extraction_failed"));
+
+        // Cache the updated person so their profile (and the home list) reflect
+        // the new info immediately, not after a stale router.refresh().
+        if (json.data?.person) await cachePerson(json.data.person);
 
         setStep("success");
         setTimeout(() => {
