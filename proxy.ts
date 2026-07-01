@@ -55,6 +55,13 @@ export async function proxy(request: NextRequest) {
     "/account-deletion",
     "/.well-known",
     "/offline", // service-worker offline fallback page (no auth/data)
+    // The compiled service worker is a static script with no user data and MUST
+    // be publicly fetchable: the browser registers AND periodically update-checks
+    // it via an uncredentialed/So-far-unauthenticated request. If it 307s to
+    // /login (as every non-public path does), registration fails ("script
+    // resource is behind a redirect") and — worse — a stuck, signed-out user can
+    // never pull the newer SW that would fix their cache. Keep it public.
+    "/sw.js",
   ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
