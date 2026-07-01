@@ -51,8 +51,16 @@ const swManifest = self.__SW_MANIFEST;
 // already owns `pages`, `pages-rsc`, and `pages-rsc-prefetch` — so the activate
 // cleanup below can match `ro-pages-*` and never touch a Serwist-managed cache.
 const REV = buildRev(swManifest);
-const RSC_CACHE = `ro-pages-rsc-${REV}`;
-const DOC_CACHE = `ro-pages-doc-${REV}`;
+// Logic-version salt: bump when the *caching rules* change (independently of the
+// per-build REV). This fix (v2) adds the redirect/login guard below. Because the
+// guard is a change to sw.ts only — not to the precached assets — REV is
+// UNCHANGED on this deploy, so without a salt the updated SW would keep the old
+// cache names and any already-poisoned "/login" entries would survive. The new
+// name guarantees the activate cleanup drops the guardless caches, so affected
+// users are healed on update, not just protected going forward.
+const CACHE_VERSION = "v2";
+const RSC_CACHE = `ro-pages-rsc-${CACHE_VERSION}-${REV}`;
+const DOC_CACHE = `ro-pages-doc-${CACHE_VERSION}-${REV}`;
 
 // ── App Router navigation caching ────────────────────────────────────────
 // Next.js navigation arrives as RSC requests and full document loads. The
@@ -61,6 +69,36 @@ const DOC_CACHE = `ro-pages-doc-${REV}`;
 const pageExpiration = () => [
   new ExpirationPlugin({ maxEntries: 256, maxAgeSeconds: 7 * 24 * 60 * 60 }),
 ];
+
+// Never let a "go to /login" (or any non-content) response get cached under a
+// real route's key. The proxy 307-redirects protected routes to /login when the
+// session is briefly invalid (during an email change, a token refresh, a flaky
+// request). StaleWhileRevalidate follows that redirect and — with no guard —
+// would store the login response under e.g. /calendar's key. It then serves
+// "go to login" for that route on EVERY future visit, even after signing in,
+// persistently, until the cache is cleared or a new build rotates the cache
+// name. That is the "changing pages sends me to login (and clearing cache
+// fixes it)" bug. Only a clean, non-redirected 200 for the actual route may
+// enter these navigation caches.
+const cacheOnlyRealContent = {
+  cacheWillUpdate: async ({ response }: { response: Response }) => {
+    // Reject errors and opaqueredirect responses (status 0).
+    if (!response || response.status !== 200) return null;
+    // A response that FOLLOWED a redirect (protected route -> /login) is the
+    // poisoning vector; its final URL is /login, not the requested route.
+    if (response.redirected) return null;
+    // Belt-and-suspenders: never store the login/offline pages under a content
+    // route key, however we reached them.
+    try {
+      const p = new URL(response.url).pathname;
+      if (p === "/login" || p === "/offline") return null;
+    } catch {
+      // response.url may be empty for some response types; the checks above
+      // (status !== 200, redirected) already cover the poisoning cases.
+    }
+    return response;
+  },
+};
 
 const navigationCaching: RuntimeCaching[] = [
   // 1. App Router RSC navigation. Next sends several RSC request shapes per
@@ -97,7 +135,7 @@ const navigationCaching: RuntimeCaching[] = [
       // cross-build shell can never be served (it would render blank).
       cacheName: RSC_CACHE,
       matchOptions: { ignoreSearch: true, ignoreVary: true },
-      plugins: pageExpiration(),
+      plugins: [cacheOnlyRealContent, ...pageExpiration()],
     }),
   },
   // 2. Full-page document navigation (first load / hard refresh / cold launch)
@@ -108,7 +146,7 @@ const navigationCaching: RuntimeCaching[] = [
       request.destination === "document",
     handler: new StaleWhileRevalidate({
       cacheName: DOC_CACHE,
-      plugins: pageExpiration(),
+      plugins: [cacheOnlyRealContent, ...pageExpiration()],
     }),
   },
 ];
