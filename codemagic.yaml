@@ -69,7 +69,23 @@ workflows:
             --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
-          xcode-project use-profiles
+          # Diagnostics: show exactly what signing assets this run has to work with.
+          echo "── certificates in keychain ──"
+          keychain list-certificates | grep -E '"common_name"|"serial_number"|"not_after"' || true
+          echo "── fetched provisioning profiles ──"
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" || true
+          # use-profiles exits 0 even when it matches NOTHING (the archive then
+          # dies later with '"App" requires a provisioning profile'). Convert
+          # that silent no-op into a loud, immediate failure right here.
+          xcode-project use-profiles 2>&1 | tee /tmp/use_profiles.log
+          if grep -qi "did not find matching provisioning profiles" /tmp/use_profiles.log; then
+            echo "ERROR: no provisioning profile matched the certificate(s) in the keychain."
+            echo "Almost always: the App Store profile at developer.apple.com is INVALID"
+            echo "(its certificate was deleted/rotated). Delete every profile for"
+            echo "$BUNDLE_ID in the portal and re-run — fetch-signing-files --create"
+            echo "will then generate a fresh one matching the current certificate."
+            exit 1
+          fi
 
       - name: Set build number from latest TestFlight build
         script: |
