@@ -24,9 +24,9 @@ import {
   getCachedProfile,
   getCachedConnectionFlag,
   subscribeOffline,
-  clearOfflineData,
   type CachedProfile,
 } from "@/lib/offline-cache";
+import { wipeLocalUserData, whenOwnerSettled } from "@/lib/offline-owner";
 import { languages, type LanguageCode } from "@/lib/i18n";
 import { useAiConsent } from "@/components/AiConsentProvider";
 
@@ -84,6 +84,9 @@ export function AccountPage() {
   const [cachedConnection, setCachedConnection] = useState(false);
   useEffect(() => {
     const load = async () => {
+      // If an account-switch wipe is in flight (owner gate), read after it —
+      // never render the previous account's cached email/name.
+      await whenOwnerSettled();
       setProfile(await getCachedProfile());
       setCachedConnection((await getCachedConnectionFlag()) ?? false);
     };
@@ -143,10 +146,21 @@ export function AccountPage() {
 
   async function handleSignOut() {
     setSigningOut(true);
+    // Scrub this account's device-local data (IndexedDB people/outbox/profile,
+    // native snapshot, SW page caches) so the next sign-in — possibly a
+    // different account — inherits nothing. Best-effort: a failed wipe must
+    // never block sign-out (the owner gate re-checks on next login anyway).
+    try {
+      await wipeLocalUserData();
+    } catch {
+      /* best-effort */
+    }
     await supabase.auth.signOut();
     await clearNativeSession();
-    router.push("/login");
-    router.refresh();
+    // HARD navigation, not router.push: a soft nav keeps the whole client
+    // runtime (router cache, module state, mounted data) alive across the
+    // identity change — the next user could be served this user's screens.
+    window.location.assign("/login");
   }
 
   async function handleDeleteAccount() {
@@ -155,9 +169,10 @@ export function AccountPage() {
     try {
       const res = await fetch("/api/account/delete", { method: "POST" });
       if (!res.ok) throw new Error(`delete failed (${res.status})`);
-      // The server account is gone — remove every local trace before leaving.
+      // The server account is gone — remove every local trace before leaving
+      // (IndexedDB + native snapshot + SW page caches).
       try {
-        await clearOfflineData();
+        await wipeLocalUserData();
       } catch {
         /* best-effort */
       }
@@ -173,8 +188,8 @@ export function AccountPage() {
       } catch {
         /* ignore */
       }
-      router.push("/login");
-      router.refresh();
+      // Hard navigation — see handleSignOut.
+      window.location.assign("/login");
     } catch {
       setDeleting(false);
       setDeleteFailed(true);

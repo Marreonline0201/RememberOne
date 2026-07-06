@@ -9,6 +9,11 @@
 //     restored only when IndexedDB is empty (eviction / fresh install / clear).
 //     Empty-gated restore + a write that trails IndexedDB ⇒ the two never race.
 //   - Native-only (Capacitor Filesystem). Web is a no-op.
+//   - OWNER-STAMPED (v2): the file records whose data it holds and is restored
+//     only for that same user. Without this, signing in with a different
+//     account after an IndexedDB wipe resurrected the previous account's
+//     people from the file (cross-account leak). v1 files (no owner) are
+//     never restored.
 
 import {
   getCachedPeople,
@@ -27,11 +32,19 @@ import type { PersonFull } from "@/types/app";
 const FILE = "ro-snapshot.json";
 
 interface Snapshot {
-  v: 1;
+  v: 1 | 2;
+  userId?: string; // v2+ — owner of the data; restore requires a match
   people: PersonFull[];
   profile: CachedProfile | null;
   connectionFlag: boolean | null;
   calendar: CachedCalendar | null;
+}
+
+// Whose data writeSnapshot may persist. Set by ensureOfflineOwner() before any
+// cache activity; while null (pre-auth) writes are skipped entirely.
+let snapshotOwner: string | null = null;
+export function setSnapshotOwner(userId: string): void {
+  snapshotOwner = userId;
 }
 
 async function isNative(): Promise<boolean> {
@@ -62,10 +75,12 @@ export function scheduleSnapshot(): void {
 }
 
 export async function writeSnapshot(): Promise<void> {
+  if (!snapshotOwner) return; // owner unknown — never write unattributed data
   if (!(await isNative())) return;
   try {
     const snapshot: Snapshot = {
-      v: 1,
+      v: 2,
+      userId: snapshotOwner,
       people: await getCachedPeople(),
       profile: await getCachedProfile(),
       connectionFlag: await getCachedConnectionFlag(),
@@ -86,8 +101,25 @@ export async function writeSnapshot(): Promise<void> {
   }
 }
 
-// ── Restore (empty-gated, one-way) ─────────────────────────────────────────
-export async function restoreSnapshotIfEmpty(): Promise<void> {
+// Remove the durable file (owner switch / sign-out / account deletion) and
+// cancel any pending debounced write so the old owner's data can't be
+// re-persisted right after the wipe.
+export async function deleteSnapshot(): Promise<void> {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  if (!(await isNative())) return;
+  try {
+    const { Filesystem, Directory } = await fs();
+    await Filesystem.deleteFile({ path: FILE, directory: Directory.Data });
+  } catch {
+    /* no file / already gone — fine */
+  }
+}
+
+// ── Restore (empty-gated, owner-gated, one-way) ────────────────────────────
+export async function restoreSnapshotIfEmpty(userId: string): Promise<void> {
   if (!(await isNative())) return;
   try {
     // Only restore when IndexedDB has no people — i.e. it was evicted/reinstalled.
@@ -106,6 +138,10 @@ export async function restoreSnapshotIfEmpty(): Promise<void> {
     }
     const snap = JSON.parse(raw) as Snapshot;
     if (!snap?.people?.length) return;
+    // Owner gate: only ever restore the CURRENT user's own data. v1 files have
+    // no owner stamp — treat them as unknown and skip (the next online load
+    // rewrites the file as v2).
+    if (snap.v !== 2 || snap.userId !== userId) return;
     // Outbox is empty here (the DB was wiped), so cachePeople clears + puts all.
     await cachePeople(snap.people);
     if (snap.profile) await cacheProfile(snap.profile);

@@ -17,6 +17,7 @@ import {
   subscribeOffline,
   outboxCount,
 } from "@/lib/offline-cache";
+import { whenOwnerSettled } from "@/lib/offline-owner";
 import { useOnline } from "@/lib/use-online";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getInitials } from "@/lib/utils";
@@ -60,6 +61,9 @@ export function PersonDetail({ id }: { id: string }) {
     };
 
     (async () => {
+      // If an account-switch wipe is in flight, read after it — never show a
+      // previous account's cached person.
+      await whenOwnerSettled();
       await loadFromCache();
       // Refresh from the server only when online AND nothing is queued (so we
       // never overwrite optimistic offline edits that haven't synced yet).

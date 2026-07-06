@@ -25,6 +25,7 @@ import {
   outboxCount,
   notifyOfflineChange,
 } from "@/lib/offline-cache";
+import { whenOwnerSettled } from "@/lib/offline-owner";
 
 const nowIso = () => new Date().toISOString();
 
@@ -238,6 +239,9 @@ let flushing = false;
 export async function flushOutbox(): Promise<void> {
   if (flushing) return;
   if (typeof navigator !== "undefined" && !navigator.onLine) return;
+  // Never replay another account's queued writes: if an owner check is in
+  // flight (account switch), wait for it — a mismatch wipes the outbox first.
+  await whenOwnerSettled();
   flushing = true;
   try {
     const items = await getOutbox();

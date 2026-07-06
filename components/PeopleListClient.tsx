@@ -20,10 +20,12 @@ import {
   type CachedProfile,
 } from "@/lib/offline-cache";
 import type { PersonFull } from "@/types/app";
+import { ensureOfflineOwner } from "@/lib/offline-owner";
 import { warmPaths } from "@/lib/offline-warm";
 import { WarmingProgress } from "@/components/WarmingProgress";
 
 interface Props {
+  userId: string;
   initialPeople: PersonFull[];
   hasCalendarConnection: boolean;
   initialProfile: CachedProfile;
@@ -35,6 +37,7 @@ interface Props {
 const WARM_ROUTES = ["/meet", "/account", "/calendar"];
 
 export function PeopleListClient({
+  userId,
   initialPeople,
   hasCalendarConnection,
   initialProfile,
@@ -43,11 +46,15 @@ export function PeopleListClient({
 
   // Snapshot the connection flag + user profile so the calendar and account
   // pages render offline without a server fetch. This online home load is the
-  // single writer for both.
+  // single writer for both. Owner-gated so these writes land AFTER any
+  // account-switch wipe (not before, where the wipe would erase them).
   useEffect(() => {
-    void cacheConnectionFlag(hasCalendarConnection);
-    void cacheProfile(initialProfile);
-  }, [hasCalendarConnection, initialProfile]);
+    void (async () => {
+      await ensureOfflineOwner(userId, initialProfile.email);
+      void cacheConnectionFlag(hasCalendarConnection);
+      void cacheProfile(initialProfile);
+    })();
+  }, [userId, hasCalendarConnection, initialProfile]);
 
   useEffect(() => {
     let active = true;
@@ -58,6 +65,13 @@ export function PeopleListClient({
     };
 
     (async () => {
+      // Owner gate FIRST: if another account's data owns this device, this
+      // wipes it (people, outbox, meta, snapshot, SW pages) before we read
+      // outboxCount() or merge anything — otherwise the previous account's
+      // pending outbox blocks the fresh fetch and cachePeople() merges the two
+      // accounts' people into one list.
+      await ensureOfflineOwner(userId, initialProfile.email);
+      if (!active) return;
       const online = typeof navigator === "undefined" ? true : navigator.onLine;
       // Online with nothing queued: pull the authoritative fresh list straight
       // from the API (never cached by the SW or the router cache), so an edit or
@@ -93,7 +107,7 @@ export function PeopleListClient({
       active = false;
       unsub();
     };
-  }, [initialPeople]);
+  }, [userId, initialPeople, initialProfile.email]);
 
   // Warm the SW cache with every person's + key route's FULL RSC payload so each
   // opens offline later. Deferred ~300ms (after the home paints) and delegated to

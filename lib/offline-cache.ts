@@ -271,6 +271,12 @@ async function setMeta(key: string, value: unknown): Promise<void> {
 export const getCachedProfile = () => getMeta<CachedProfile>("profile");
 export const cacheProfile = (p: CachedProfile) => setMeta("profile", p);
 
+// Which user's data this device-local store holds. Read/written only by
+// lib/offline-owner.ts (ensureOfflineOwner) — see there for the wipe-on-switch
+// contract that keeps one account's data from leaking into another's session.
+export const getOwnerMeta = () => getMeta<string>("ownerUserId");
+export const setOwnerMeta = (userId: string) => setMeta("ownerUserId", userId);
+
 export const getCachedConnectionFlag = () => getMeta<boolean>("connectionFlag");
 export const cacheConnectionFlag = (connected: boolean) =>
   setMeta("connectionFlag", connected);

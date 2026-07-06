@@ -102,8 +102,11 @@ export default function LoginPage() {
             // can rehydrate without forcing a re-login.
             await persistNativeSession(data.session);
 
-            router.push("/");
-            router.refresh();
+            // HARD navigation on sign-in: a soft router.push keeps the previous
+            // client runtime (router cache, module state) alive across an
+            // identity change, which can serve the previous account's screens
+            // and data to the new one. A full document load starts clean.
+            window.location.assign("/");
           } catch (err: unknown) {
             console.error("[deep-link login] exchange failed:", err);
             toast({
@@ -210,8 +213,9 @@ export default function LoginPage() {
         });
         if (error) throw error;
         await persistNativeSession(data.session);
-        router.push("/");
-        router.refresh();
+        // HARD navigation on sign-in (see the deep-link handler above): never
+        // reuse the previous session's client runtime for a new identity.
+        window.location.assign("/");
       }
     } catch (err: unknown) {
       toast({

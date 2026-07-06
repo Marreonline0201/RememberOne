@@ -41,7 +41,10 @@ export default async function DashboardLayout({
             */}
             <main className="max-w-5xl mx-auto px-5 pt-safe-header pb-24 md:px-8 md:pt-6 md:pb-10">
               <OfflineBanner />
-              <OfflineSyncProvider />
+              {/* userId scopes all device-local offline state to this account —
+                  a different signed-in user triggers a full local wipe first.
+                  email covers stores written before owner stamping existed. */}
+              <OfflineSyncProvider userId={user.id} email={user.email ?? null} />
               {children}
             </main>
           </div>

@@ -33,6 +33,7 @@ export default async function DashboardPage() {
 
   return (
     <PeopleListClient
+      userId={user.id}
       initialPeople={people}
       hasCalendarConnection={!!calendarConnection}
       initialProfile={initialProfile}

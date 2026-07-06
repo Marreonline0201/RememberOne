@@ -10,9 +10,16 @@ import { flushOutbox } from "@/lib/offline-queue";
 import { outboxCount, subscribeOffline } from "@/lib/offline-cache";
 import { ensurePersistentStorage } from "@/lib/storage-persist";
 import { restoreSnapshotIfEmpty, scheduleSnapshot } from "@/lib/offline-snapshot";
+import { ensureOfflineOwner } from "@/lib/offline-owner";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-export function OfflineSyncProvider() {
+export function OfflineSyncProvider({
+  userId,
+  email,
+}: {
+  userId: string;
+  email: string | null;
+}) {
   const { language } = useLanguage();
   const ko = language === "ko";
   const [pending, setPending] = useState(0);
@@ -24,16 +31,23 @@ export function OfflineSyncProvider() {
       if (active) setPending(n);
     };
 
-    // Durability bootstrap: pin storage so the OS won't evict our data, restore
-    // from the native snapshot if IndexedDB was wiped (eviction / reinstall),
-    // then keep the snapshot updated on every local change.
+    // Boot sequence — ORDER MATTERS:
+    //   1. Owner gate: if a different account owned this device's local data,
+    //      wipe it (IndexedDB + native snapshot + SW page caches) BEFORE
+    //      anything reads, replays, or restores it.
+    //   2. Durability: pin storage, then restore THIS user's native snapshot
+    //      if IndexedDB was evicted (the restore is owner-checked too).
+    //   3. Flush any backlog of queued writes (post-gate, so they're ours).
     void (async () => {
+      await ensureOfflineOwner(userId, email);
       await ensurePersistentStorage();
-      await restoreSnapshotIfEmpty();
+      await restoreSnapshotIfEmpty(userId);
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        await flushOutbox();
+      }
+      await refresh();
     })();
     const unsubSnap = subscribeOffline(scheduleSnapshot);
-
-    void refresh();
 
     const unsub = subscribeOffline(refresh);
     const onOnline = () => {
@@ -41,18 +55,13 @@ export function OfflineSyncProvider() {
     };
     window.addEventListener("online", onOnline);
 
-    // Launched online with a backlog? Flush now.
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      void flushOutbox().then(refresh);
-    }
-
     return () => {
       active = false;
       unsub();
       unsubSnap();
       window.removeEventListener("online", onOnline);
     };
-  }, []);
+  }, [userId, email]);
 
   if (pending <= 0) return null;
 
