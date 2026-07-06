@@ -31,6 +31,8 @@ workflows:
       app_store_connect: codemagic       # <-- the API key name you saved in Codemagic
 
     environment:
+      groups:
+        - appstore_credentials           # holds CERTIFICATE_PRIVATE_KEY (secure var, set in the Codemagic UI)
       vars:
         BUNDLE_ID: "com.rememberone.app"
         APPLE_TEAM_ID: "LFJHU84S5S"       # Apple Developer Team ID (for manual archive signing)
@@ -47,21 +49,24 @@ workflows:
       - name: Capacitor sync iOS (regenerates config + copies webDir)
         script: npx cap sync ios
 
-      - name: Set up code signing (create cert + profile from scratch)
+      - name: Set up code signing (fetch or create cert + profile)
         script: |
           keychain initialize
-          # A brand-new account has NO distribution certificate. fetch-signing-files
-          # --create needs a private key to create the certificate FROM — without it
-          # no usable cert is produced and use-profiles has nothing to apply (the
-          # "App requires a provisioning profile" archive error). So generate a key;
-          # fetch-signing-files then creates the distribution cert AND the App Store
-          # provisioning profile. API creds come from the App Store Connect API key
-          # integration's APP_STORE_CONNECT_* env vars.
-          ssh-keygen -t rsa -b 2048 -m PEM -f /tmp/sign_key -q -N ""
+          # CERTIFICATE_PRIVATE_KEY is a PERSISTENT key stored as a secure env var
+          # (group: appstore_credentials). fetch-signing-files matches it to the
+          # existing distribution certificate — or creates one on first use — and
+          # fetches/creates the App Store provisioning profile.
+          #
+          # Do NOT generate the key per-build (the old ssh-keygen-into-/tmp
+          # approach): each run then wants a brand-new certificate, the previous
+          # certs' keys are gone forever, and once Apple's per-team distribution-
+          # certificate limit is hit no usable cert reaches the keychain —
+          # use-profiles silently applies nothing and the archive dies with
+          # '"App" requires a provisioning profile'.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --platform IOS \
-            --certificate-key @file:/tmp/sign_key \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
           xcode-project use-profiles
