@@ -4,23 +4,32 @@ import { useEffect, useState } from "react";
 import { Download, X as XIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-// Minimum Android versionCode users must be on. Anything lower triggers
-// the banner on app launch.
+// Minimum native build users must be on, PER PLATFORM — Android versionCode
+// and iOS CFBundleVersion are unrelated numbering universes, so they must
+// never share one threshold (an iOS TestFlight build "2" is NOT older than
+// Android versionCode 15). Anything lower triggers the banner on app launch.
 //
-// CRITICAL — DO NOT BUMP THIS AHEAD OF PLAY STORE.
+// CRITICAL — DO NOT BUMP THESE AHEAD OF THE STORE.
 // The JS bundle is hot-deployed via Vercel within ~1 min of every push, so
-// raising MIN_BUILD here BEFORE the matching .aab is actually live on Play
-// makes the banner appear to users whose Play Store still shows the old
+// raising a threshold here BEFORE the matching binary is actually live on its
+// store makes the banner appear to users whose store still shows the old
 // version as current. They tap Update, see no update available, get
 // confused. Sequence must be:
-//   1. Build + upload .aab with the new versionCode
-//   2. Wait for it to ROLL OUT on Play Store (production/your track)
-//   3. THEN bump this constant and push the JS change to Vercel
-// Keep in sync with android/app/build.gradle but only AFTER step 2.
-const MIN_BUILD = 15;
+//   1. Build + upload the new binary (.aab / TestFlight-then-App-Store)
+//   2. Wait for it to ROLL OUT on the store
+//   3. THEN bump the constant and push the JS change to Vercel
+// android: keep in sync with android/app/build.gradle but only AFTER step 2.
+// ios: 0 = disabled (no App Store release yet — TestFlight distributes its
+// own updates); set to the CFBundleVersion once an App Store build is live.
+const MIN_BUILD: Record<string, number> = {
+  android: 15,
+  ios: 0,
+};
 
-const PLAY_STORE_URL =
-  "https://play.google.com/store/apps/details?id=com.rememberone.app";
+const STORE_URL: Record<string, string> = {
+  android: "https://play.google.com/store/apps/details?id=com.rememberone.app",
+  ios: "https://apps.apple.com/app/id6784896315",
+};
 
 // Module-level guard prevents the native version check from running more
 // than once per JS runtime. Survives every React re-render and remount.
@@ -32,6 +41,7 @@ export function NativeUpdatePrompt() {
 
   const [needsUpdate, setNeedsUpdate] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [platform, setPlatform] = useState<"android" | "ios">("android");
 
   useEffect(() => {
     if (didCheck) return;
@@ -42,11 +52,18 @@ export function NativeUpdatePrompt() {
         const { Capacitor } = await import("@capacitor/core");
         if (!Capacitor.isNativePlatform()) return;
 
+        // Compare each platform's build number ONLY against its own threshold.
+        const plat = Capacitor.getPlatform();
+        if (plat !== "android" && plat !== "ios") return;
+        const min = MIN_BUILD[plat];
+        if (!min) return; // 0 = update prompt disabled for this platform
+
         const { App } = await import("@capacitor/app");
         const info = await App.getInfo();
         const installed = parseInt(info.build, 10);
-        if (Number.isNaN(installed) || installed >= MIN_BUILD) return;
+        if (Number.isNaN(installed) || installed >= min) return;
 
+        setPlatform(plat);
         setNeedsUpdate(true);
       } catch (err) {
         // Reset so a later mount can retry (won't happen in practice, but
@@ -59,12 +76,16 @@ export function NativeUpdatePrompt() {
 
   if (!needsUpdate || dismissed) return null;
 
-  async function openPlayStore() {
+  const storeUrl = STORE_URL[platform];
+  const storeNameKo = platform === "ios" ? "App Store" : "Play 스토어";
+  const storeNameEn = platform === "ios" ? "App Store" : "Play Store";
+
+  async function openStore() {
     try {
       const { Browser } = await import("@capacitor/browser");
-      await Browser.open({ url: PLAY_STORE_URL });
+      await Browser.open({ url: storeUrl });
     } catch {
-      window.location.href = PLAY_STORE_URL;
+      window.location.href = storeUrl;
     }
   }
 
@@ -102,14 +123,14 @@ export function NativeUpdatePrompt() {
               style={{ color: "#5e7983" }}
             >
               {ko
-                ? "새 버전이 Play 스토어에 있어요."
-                : "A newer version is on the Play Store."}
+                ? `새 버전이 ${storeNameKo}에 있어요.`
+                : `A newer version is on the ${storeNameEn}.`}
             </p>
           </div>
 
           <button
             type="button"
-            onClick={openPlayStore}
+            onClick={openStore}
             className="shrink-0 text-white h-8 px-3 text-[12px] hover:opacity-90"
             style={{
               background: "linear-gradient(to right, #284e72, #482d7c)",
