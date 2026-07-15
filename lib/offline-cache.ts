@@ -10,6 +10,7 @@
 
 import { openDB, type IDBPDatabase } from "idb";
 import type { CalendarEvent, PersonFull } from "@/types/app";
+import type { Group } from "@/types/database";
 
 const DB_NAME = "rememberone-offline";
 const DB_VERSION = 3;
@@ -283,6 +284,12 @@ export const cacheConnectionFlag = (connected: boolean) =>
 
 export const getCachedCalendarEvents = () => getMeta<CachedCalendar>("calendar");
 export const cacheCalendarEvents = (c: CachedCalendar) => setMeta("calendar", c);
+
+// Group catalog (id + name + description). People carry only group_ids; names
+// hydrate against this list at render time (same normalization idea as the
+// calendar's matchedPersonIds above). Written by lib/use-groups.ts.
+export const getCachedGroups = () => getMeta<Group[]>("groups");
+export const cacheGroups = (g: Group[]) => setMeta("groups", g);
 
 // App-created PHONE-calendar events: device event id → picked personId | "me".
 // The device calendar has no private-tag field (unlike Google's

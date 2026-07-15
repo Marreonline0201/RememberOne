@@ -42,6 +42,7 @@ interface Body {
   key?: string;
   value?: string;
   id?: string;
+  group_ids?: string[];
 }
 
 function pathOf(url: string): string {
@@ -86,6 +87,21 @@ export async function applyMutationToCache(
       await cachePerson(updated);
       return;
     }
+  }
+
+  // /api/people/{id}/groups — replace-all membership. The URL matches
+  // pendingPersonIds()'s /^\/api\/people\/([^/]+)/ prefix, so a queued edit
+  // marks the person pending and cachePeople's merge protects it — for free.
+  match = path.match(/^\/api\/people\/([^/]+)\/groups$/);
+  if (match && m === "PUT") {
+    const p = await getCachedPerson(match[1]);
+    if (!p) return;
+    await cachePerson({
+      ...p,
+      group_ids: Array.isArray(body?.group_ids) ? body.group_ids : [],
+      updated_at: nowIso(),
+    });
+    return;
   }
 
   // /api/people/{id}/family

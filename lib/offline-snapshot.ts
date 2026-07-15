@@ -20,14 +20,17 @@ import {
   getCachedProfile,
   getCachedConnectionFlag,
   getCachedCalendarEvents,
+  getCachedGroups,
   cachePeople,
   cacheProfile,
   cacheConnectionFlag,
   cacheCalendarEvents,
+  cacheGroups,
   type CachedProfile,
   type CachedCalendar,
 } from "@/lib/offline-cache";
 import type { PersonFull } from "@/types/app";
+import type { Group } from "@/types/database";
 
 const FILE = "ro-snapshot.json";
 
@@ -38,6 +41,7 @@ interface Snapshot {
   profile: CachedProfile | null;
   connectionFlag: boolean | null;
   calendar: CachedCalendar | null;
+  groups?: Group[] | null; // additive (still v2) — older files simply lack it
 }
 
 // Whose data writeSnapshot may persist. Set by ensureOfflineOwner() before any
@@ -85,6 +89,7 @@ export async function writeSnapshot(): Promise<void> {
       profile: await getCachedProfile(),
       connectionFlag: await getCachedConnectionFlag(),
       calendar: await getCachedCalendarEvents(),
+      groups: await getCachedGroups(),
     };
     // Never overwrite a good snapshot with an empty one (e.g. a transient empty
     // read before the cache has loaded).
@@ -147,6 +152,7 @@ export async function restoreSnapshotIfEmpty(userId: string): Promise<void> {
     if (snap.profile) await cacheProfile(snap.profile);
     if (snap.connectionFlag != null) await cacheConnectionFlag(snap.connectionFlag);
     if (snap.calendar) await cacheCalendarEvents(snap.calendar);
+    if (snap.groups) await cacheGroups(snap.groups);
   } catch (e) {
     console.warn("[offline] restoreSnapshotIfEmpty failed:", e);
   }
