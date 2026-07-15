@@ -7,7 +7,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Share2, Pencil, Trash2, Loader2, type LucideIcon } from "lucide-react";
+import { Share2, Pencil, Trash2, Loader2, FolderPlus, type LucideIcon } from "lucide-react";
+import { GroupPickerSheet } from "@/components/GroupPickerSheet";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,7 @@ export function PersonCardActions({ person, open, onOpenChange }: Props) {
   const { toast } = useToast();
   const { language, t } = useLanguage();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   // The same press that opens the menu also fires a trailing click on
   // finger-lift. Stay "unarmed" briefly so that stray click can't instantly
@@ -192,6 +194,15 @@ export function PersonCardActions({ person, open, onOpenChange }: Props) {
               onClick={() => armed && handleEdit()}
             />
             <MenuButton
+              icon={FolderPlus}
+              label={t("card.groups")}
+              onClick={() => {
+                if (!armed) return;
+                onOpenChange(false);
+                setGroupsOpen(true);
+              }}
+            />
+            <MenuButton
               icon={Trash2}
               label={t("card.delete")}
               destructive
@@ -204,6 +215,16 @@ export function PersonCardActions({ person, open, onOpenChange }: Props) {
           </div>
         </>
       )}
+
+      {/* Group picker — outside the {open && ...} block so it survives the
+          floating menu closing, same as the confirm dialog below. */}
+      <GroupPickerSheet
+        open={groupsOpen}
+        onOpenChange={setGroupsOpen}
+        personId={person.id}
+        personName={person.name}
+        initialGroupIds={person.group_ids ?? []}
+      />
 
       {/* Destructive confirm — Yes / No, styled to the app. */}
       <Dialog

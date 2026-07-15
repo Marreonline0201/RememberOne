@@ -197,3 +197,13 @@ body {
     animation: none;
   }
 }
+
+/* Horizontal chip rows (home group filter): scrollable but without a visible
+   scrollbar — the row affords scrolling by its clipped last chip. */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

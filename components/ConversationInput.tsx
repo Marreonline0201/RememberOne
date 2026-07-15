@@ -28,7 +28,9 @@ import {
   X,
   ArrowLeft,
   Loader2,
+  FolderPlus,
 } from "lucide-react";
+import { GroupPickerSheet } from "@/components/GroupPickerSheet";
 import type { AIExtractionResult, ExtractedPerson } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLanguage } from "@/lib/i18n";
@@ -94,6 +96,8 @@ export function ConversationInput({ personId, personName }: Props) {
   // — that's cosmetic only because MediaRecorder is still capturing audio.
   const [livePartial, setLivePartial] = useState("");
   const [preview, setPreview] = useState<ExtractionPreview | null>(null);
+  // Preview-step group picker: which just-saved person it's editing (null = closed).
+  const [groupsFor, setGroupsFor] = useState<{ id: string; name: string } | null>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -658,51 +662,75 @@ export function ConversationInput({ personId, personName }: Props) {
         {preview.extraction.people.map((person: ExtractedPerson, idx: number) => {
           const id = preview.personIds[idx];
           return (
-            <button
-              key={idx}
-              onClick={() => handleViewPerson(id)}
-              className="w-full text-left p-4 transition-opacity active:opacity-80"
-              style={{
-                borderRadius: "10px 2px 10px 2px",
-                background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <h3
-                  className="text-[22px] text-black"
-                  style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+            // The card is a <button> (HTML forbids nesting buttons), so the
+            // groups affordance is a sibling row below it.
+            <div key={idx}>
+              <button
+                onClick={() => handleViewPerson(id)}
+                className="w-full text-left p-4 transition-opacity active:opacity-80"
+                style={{
+                  borderRadius: "10px 2px 10px 2px",
+                  background: "linear-gradient(52deg, #d0f2ff 0%, #dccaff 100%)",
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <h3
+                    className="text-[22px] text-black"
+                    style={{ fontFamily: "'Hammersmith One', sans-serif" }}
+                  >
+                    {person.name}
+                  </h3>
+                  <ChevronRight className="w-5 h-5" style={{ color: "#665b7b" }} />
+                </div>
+
+                {person.attributes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {person.attributes.slice(0, 5).map((attr) => (
+                      <Badge
+                        key={attr.key}
+                        variant="secondary"
+                        className="text-[10px] py-0.5 px-2 rounded-[5px]"
+                        style={{ backgroundColor: "#dccaff", color: "#1a2a3a" }}
+                      >
+                        {localizeKey(attr.key, language)}: {attr.value}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {person.family_members.length > 0 && (
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <Users className="w-3 h-3 shrink-0" style={{ color: "#665b7b" }} />
+                    <span className="text-[11px]" style={{ color: "#665b7b" }}>
+                      {person.family_members.map((fm) => fm.name).join(", ")}
+                    </span>
+                  </div>
+                )}
+              </button>
+              <div className="flex justify-end mt-1">
+                <button
+                  type="button"
+                  onClick={() => setGroupsFor({ id, name: person.name })}
+                  className="inline-flex items-center gap-1 text-[12px] px-1 py-0.5 transition-opacity active:opacity-70"
+                  style={{ color: "#482d7c" }}
                 >
-                  {person.name}
-                </h3>
-                <ChevronRight className="w-5 h-5" style={{ color: "#665b7b" }} />
+                  <FolderPlus className="w-3.5 h-3.5" />
+                  {t("groups.add_to")}
+                </button>
               </div>
-
-              {person.attributes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {person.attributes.slice(0, 5).map((attr) => (
-                    <Badge
-                      key={attr.key}
-                      variant="secondary"
-                      className="text-[10px] py-0.5 px-2 rounded-[5px]"
-                      style={{ backgroundColor: "#dccaff", color: "#1a2a3a" }}
-                    >
-                      {localizeKey(attr.key, language)}: {attr.value}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {person.family_members.length > 0 && (
-                <div className="flex items-center gap-1.5 mt-2">
-                  <Users className="w-3 h-3 shrink-0" style={{ color: "#665b7b" }} />
-                  <span className="text-[11px]" style={{ color: "#665b7b" }}>
-                    {person.family_members.map((fm) => fm.name).join(", ")}
-                  </span>
-                </div>
-              )}
-            </button>
+            </div>
           );
         })}
+
+        {groupsFor && (
+          <GroupPickerSheet
+            open
+            onOpenChange={(o) => !o && setGroupsFor(null)}
+            personId={groupsFor.id}
+            personName={groupsFor.name}
+            initialGroupIds={[]}
+          />
+        )}
 
         <div className="flex flex-col gap-3 pt-2">
           <button

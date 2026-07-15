@@ -19,7 +19,10 @@ import { MeetModeToggle } from "@/components/MeetModeToggle";
 import { AiLoadingState } from "@/components/AiLoadingState";
 import { AiSuccessState } from "@/components/AiSuccessState";
 import { useAiConsent } from "@/components/AiConsentProvider";
+import { GroupChecklist } from "@/components/GroupChecklist";
 import { cachePerson } from "@/lib/offline-cache";
+import { queuedFetch } from "@/lib/offline-queue";
+import { useGroups } from "@/lib/use-groups";
 import type { AdditionalExtractionResult } from "@/lib/gemini";
 import type { ExtractedAttribute, ExtractedFamilyMember } from "@/types/app";
 
@@ -63,6 +66,10 @@ export function WritePersonForm() {
   const [name, setName] = useState("");
   const [info, setInfo] = useState("");
   const [organized, setOrganized] = useState<ReviewData | null>(null);
+
+  // Optional group assignment, applied AFTER the person is saved.
+  const { groups, createGroup } = useGroups();
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
   // Monotonic source of stable row ids for the editable review lists.
   const ridRef = useRef(0);
@@ -191,6 +198,26 @@ export function WritePersonForm() {
       if (json.data?.person) await cachePerson(json.data.person);
 
       const personId: string | null = json.data?.personId ?? null;
+
+      // Apply the optional group selection. Runs AFTER cachePerson so the
+      // optimistic offline branch finds the person in the store. Membership is
+      // a nice-to-have on top of an already-successful save — failures are
+      // swallowed (the profile page's Groups section can fix it later). Note:
+      // saveExtractionResult may MERGE into an existing same-named person, in
+      // which case this replace-all overwrites that person's memberships with
+      // the picked set — accepted v1 semantics.
+      if (personId && selectedGroupIds.length > 0) {
+        try {
+          await queuedFetch(`/api/people/${personId}/groups`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ group_ids: selectedGroupIds }),
+          });
+        } catch {
+          /* person save already succeeded */
+        }
+      }
+
       setStep("saved");
       setTimeout(() => {
         router.push(personId ? `/people/${personId}` : "/");
@@ -388,6 +415,26 @@ export function WritePersonForm() {
             <Plus className="w-3.5 h-3.5" />
             {t("write.add_family")}
           </button>
+        </div>
+
+        {/* Groups (optional) — applied after save */}
+        <div className="p-3" style={cardStyle}>
+          <span className={labelClass}>{t("groups.title")}</span>
+          <GroupChecklist
+            groups={groups}
+            selectedIds={selectedGroupIds}
+            onToggle={(id) =>
+              setSelectedGroupIds((prev) =>
+                prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]
+              )
+            }
+            // The write flow is online by construction (organize = AI call),
+            // so quick-create is always available here.
+            onQuickCreate={async (name) => {
+              const g = await createGroup(name);
+              setSelectedGroupIds((prev) => [...prev, g.id]);
+            }}
+          />
         </div>
 
         {/* Summary (read-only) */}

@@ -18,6 +18,8 @@ import {
   outboxCount,
 } from "@/lib/offline-cache";
 import { whenOwnerSettled } from "@/lib/offline-owner";
+import { useGroups } from "@/lib/use-groups";
+import { GroupPickerSheet } from "@/components/GroupPickerSheet";
 import { useOnline } from "@/lib/use-online";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getInitials } from "@/lib/utils";
@@ -46,6 +48,12 @@ export function PersonDetail({ id }: { id: string }) {
 
   const [person, setPerson] = useState<PersonFull | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
+
+  // Groups: names hydrate from the cached catalog; membership edits go through
+  // the picker (offline-capable). subscribeOffline below re-reads the person
+  // after a save, so the chips update without extra wiring.
+  const { groups } = useGroups();
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,6 +221,64 @@ export function PersonDetail({ id }: { id: string }) {
           />
         )}
       </div>
+
+      {/* ── Groups — membership chips + edit (offline-capable) ────────────── */}
+      <div
+        className="p-4"
+        style={{
+          borderRadius: "10px 2px 10px 2px",
+          backgroundColor: "#f5f0ff",
+          border: "1px solid #dccaff",
+        }}
+      >
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p
+            className="text-[10px] uppercase tracking-wider"
+            style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+          >
+            <T k="person.groups_section" />
+          </p>
+          <button
+            type="button"
+            onClick={() => setGroupPickerOpen(true)}
+            className="text-[12px] underline"
+            style={{ color: "#482d7c" }}
+          >
+            <T k="groups.edit_membership" />
+          </button>
+        </div>
+        {(() => {
+          // Hydrate names from the catalog; ids of deleted groups are skipped.
+          const memberGroups = (person.group_ids ?? [])
+            .map((id) => groups.find((g) => g.id === id))
+            .filter((g): g is NonNullable<typeof g> => !!g);
+          return memberGroups.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {memberGroups.map((g) => (
+                <span
+                  key={g.id}
+                  className="text-[11px] px-2 py-[3px] rounded-[5px] shadow-sm text-black"
+                  style={{ backgroundColor: "#dccaff" }}
+                >
+                  {g.name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px]" style={{ color: "#5e7983" }}>
+              <T k="groups.none_yet" />
+            </p>
+          );
+        })()}
+      </div>
+
+      <GroupPickerSheet
+        open={groupPickerOpen}
+        onOpenChange={setGroupPickerOpen}
+        personId={person.id}
+        personName={person.name}
+        initialGroupIds={person.group_ids ?? []}
+      />
 
       {/* ── AI flows — online only (Log meeting + AI quick-note) ───────────── */}
       {online && (
