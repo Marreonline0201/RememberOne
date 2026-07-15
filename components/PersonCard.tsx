@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Mic } from "lucide-react";
+import { ChevronUp, Mic } from "lucide-react";
 import { capitalize, localizeKey, localizeRelation, formatRelativeDate, asOfLabel } from "@/lib/utils";
 import type { PersonFull } from "@/types/app";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -29,9 +29,14 @@ function isInterest(key: string) {
 
 interface Props {
   person: PersonFull;
+  // Per-card detail visibility (Feature: home info toggle). When collapsed,
+  // only the header (name + last-met + chevron) renders. Optional so other
+  // callers keep today's always-expanded card with no chevron.
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function PersonCard({ person }: Props) {
+export function PersonCard({ person, collapsed = false, onToggleCollapse }: Props) {
   const { language, t } = useLanguage();
   const locale = getLanguage(language).locale;
   const lastMeeting = person.meetings[0] ?? null;
@@ -105,7 +110,7 @@ export function PersonCard({ person }: Props) {
         // Full prefetch (not just the loading shell) so the person's data-less
         // route RSC is cached and opens offline; the data comes from IndexedDB.
         prefetch
-        className="block p-4 pb-16 transition-opacity active:opacity-90 select-none no-native-drag"
+        className={`block p-4 ${collapsed ? "pb-4" : "pb-16"} transition-opacity active:opacity-90 select-none no-native-drag`}
         // On touch, pressing-and-holding a link triggers the browser's native
         // link-drag ("drags the URL out") which also cancels our long-press
         // timer so the menu never opens. draggable=false + onDragStart kill it;
@@ -127,10 +132,10 @@ export function PersonCard({ person }: Props) {
         onContextMenu={(e) => e.preventDefault()}
         onDragStart={(e) => e.preventDefault()}
       >
-        {/* Header: person name + "last met" */}
+        {/* Header: person name + "last met" + collapse chevron */}
         <div className="flex items-start justify-between gap-3">
           <h2
-            className="text-[26px] leading-tight text-black"
+            className="text-[26px] leading-tight text-black flex-1 min-w-0"
             style={{ fontFamily: "'Hammersmith One', sans-serif" }}
           >
             {person.name}
@@ -140,10 +145,32 @@ export function PersonCard({ person }: Props) {
               {t("person.last_met")} {formatRelativeDate(lastMeeting.meeting_date, locale)}
             </p>
           )}
+          {onToggleCollapse && (
+            <button
+              type="button"
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? t("card.expand") : t("card.collapse")}
+              className="shrink-0 -mt-1 -mr-1 w-9 h-9 flex items-center justify-center rounded-full active:bg-black/5"
+              style={{ color: "#284e72", touchAction: "manipulation" }}
+              // stopPropagation on pointerdown: the Link's long-press timer
+              // never starts for chevron taps (suppressClickRef untouched).
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault(); // don't navigate the wrapping <Link>
+                e.stopPropagation();
+                onToggleCollapse();
+              }}
+            >
+              <ChevronUp
+                className={`w-4 h-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
+              />
+            </button>
+          )}
         </div>
 
         {/* Main info chips (age, job, school, company, etc.) */}
-        {mainInfo.length > 0 && (
+        {!collapsed && mainInfo.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {mainInfo.map((attr) => {
               const qualifier = asOfLabel(attr.key, attr.updated_at, language);
@@ -162,7 +189,7 @@ export function PersonCard({ person }: Props) {
         )}
 
         {/* Family */}
-        {person.family_members.length > 0 && (
+        {!collapsed && person.family_members.length > 0 && (
           <div className="mt-4">
             <p
               className="text-[10px] uppercase tracking-wider mb-2"
@@ -205,7 +232,7 @@ export function PersonCard({ person }: Props) {
         )}
 
         {/* Interests */}
-        {interests.length > 0 && (
+        {!collapsed && interests.length > 0 && (
           <div className="mt-4">
             <p
               className="text-[10px] uppercase tracking-wider mb-2"
@@ -231,7 +258,7 @@ export function PersonCard({ person }: Props) {
             fit as structured attributes). Shown at the bottom of the card.
             RecapLine auto-translates to the current app language and caches
             the result in localStorage. */}
-        {lastMeeting?.summary && (
+        {!collapsed && lastMeeting?.summary && (
           <RecapLine
             summary={lastMeeting.summary}
             className="mt-4 text-[11px] leading-snug italic pr-8"
@@ -240,15 +267,18 @@ export function PersonCard({ person }: Props) {
         )}
       </Link>
 
-      {/* Mic — quick "log meeting with this person" */}
-      <Link
-        href={`/meet?personId=${person.id}`}
-        className="absolute bottom-4 left-4 flex items-center justify-center w-8 h-8 rounded-full transition-opacity active:opacity-70"
-        style={{ border: "1.5px solid #2fe0ff" }}
-        aria-label={`Log meeting with ${person.name}`}
-      >
-        <Mic className="w-3.5 h-3.5" style={{ color: "#284e72" }} />
-      </Link>
+      {/* Mic — quick "log meeting with this person". Hidden while collapsed
+          (the pb-16 that houses it collapses to pb-4). */}
+      {!collapsed && (
+        <Link
+          href={`/meet?personId=${person.id}`}
+          className="absolute bottom-4 left-4 flex items-center justify-center w-8 h-8 rounded-full transition-opacity active:opacity-70"
+          style={{ border: "1.5px solid #2fe0ff" }}
+          aria-label={`Log meeting with ${person.name}`}
+        >
+          <Mic className="w-3.5 h-3.5" style={{ color: "#284e72" }} />
+        </Link>
+      )}
 
       {/* Long-press menu (Share / Edit / Delete) + delete confirmation. */}
       <PersonCardActions person={person} open={menuOpen} onOpenChange={setMenuOpen} />

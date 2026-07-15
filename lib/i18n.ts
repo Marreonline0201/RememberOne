@@ -163,6 +163,9 @@ const keys: Translations = {
   "card.share": { en: "Share", ko: "공유" },
   "card.edit": { en: "Edit", ko: "수정" },
   "card.delete": { en: "Delete", ko: "삭제" },
+  "card.expand": { en: "Expand card", ko: "카드 펼치기" },
+  "card.collapse": { en: "Collapse card", ko: "카드 접기" },
+  "card.groups": { en: "Groups…", ko: "그룹…" },
   "confirm.delete_title": {
     en: "Delete this person?",
     ko: "이 사람을 삭제할까요?",

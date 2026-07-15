@@ -3,11 +3,12 @@
 // PeopleGrid — client wrapper around the people list that adds a live search/filter bar.
 // Receives all people from the server component and filters in-browser — no extra API calls.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PersonCard } from "@/components/PersonCard";
 import { Input } from "@/components/ui/input";
 import { Search, X } from "lucide-react";
 import type { PersonFull } from "@/types/app";
+import { useCollapsedSet, HOME_COLLAPSED_KEY } from "@/lib/use-collapsed-set";
 
 interface Props {
   people: PersonFull[];
@@ -29,6 +30,13 @@ function sortPeople(list: PersonFull[]): PersonFull[] {
 
 export function PeopleGrid({ people }: Props) {
   const [query, setQuery] = useState("");
+
+  // Per-card detail visibility, persisted on the device. Pruned against the
+  // full people list so deleted people's ids don't accumulate forever.
+  const { isCollapsed, toggle, prune, hydrated } = useCollapsedSet(HOME_COLLAPSED_KEY);
+  useEffect(() => {
+    if (hydrated) prune(people.map((p) => p.id));
+  }, [hydrated, people, prune]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,7 +86,12 @@ export function PeopleGrid({ people }: Props) {
       {filtered.length > 0 ? (
         <div className="flex flex-col gap-4">
           {filtered.map((person) => (
-            <PersonCard key={person.id} person={person} />
+            <PersonCard
+              key={person.id}
+              person={person}
+              collapsed={hydrated && isCollapsed(person.id)}
+              onToggleCollapse={() => toggle(person.id)}
+            />
           ))}
         </div>
       ) : query.trim() ? (
