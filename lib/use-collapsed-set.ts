@@ -1,15 +1,20 @@
 "use client";
 
-// Persisted set of collapsed home-card person ids (device-local display
+// Persisted set of EXPANDED home-card person ids (device-local display
 // preference, deliberately localStorage — same philosophy as use-dismiss-flag:
 // a metadata write would be lost offline, and this is per-device anyway).
+//
+// Cards default COLLAPSED (name + last-met only); tapping the chevron expands
+// a card and remembers it here. Absent-from-set = collapsed, which also makes
+// the SSR/pre-hydration frame collapsed — the list only ever grows after
+// hydration, never jarringly shrinks.
 //
 // One instance lives in PeopleGrid and hands plain props to each card: a
 // single storage read, one source of truth, no cross-card sync problem.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const HOME_COLLAPSED_KEY = "ro.home.collapsed";
+export const HOME_EXPANDED_KEY = "ro.home.expanded";
 
 function readSet(key: string): Set<string> {
   try {
@@ -29,24 +34,22 @@ function writeSet(key: string, set: Set<string>): void {
   try {
     localStorage.setItem(key, JSON.stringify([...set]));
   } catch {
-    /* quota / privacy mode — collapse just won't persist */
+    /* quota / privacy mode — expansion just won't persist */
   }
 }
 
-export function useCollapsedSet(key: string) {
+export function usePersistedIdSet(key: string) {
   const [set, setSet] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
   const keyRef = useRef(key);
   keyRef.current = key;
 
-  // SSR-safe: default empty (= every card expanded, today's look) until the
-  // stored set hydrates on the client.
   useEffect(() => {
     setSet(readSet(key));
     setHydrated(true);
   }, [key]);
 
-  const isCollapsed = useCallback((id: string) => set.has(id), [set]);
+  const has = useCallback((id: string) => set.has(id), [set]);
 
   const toggle = useCallback((id: string) => {
     setSet((prev) => {
@@ -75,5 +78,5 @@ export function useCollapsedSet(key: string) {
     });
   }, []);
 
-  return { isCollapsed, toggle, prune, hydrated };
+  return { has, toggle, prune, hydrated };
 }

@@ -9,7 +9,7 @@ import { ManageGroupsSheet } from "@/components/ManageGroupsSheet";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, X } from "lucide-react";
 import type { PersonFull } from "@/types/app";
-import { useCollapsedSet, HOME_COLLAPSED_KEY } from "@/lib/use-collapsed-set";
+import { usePersistedIdSet, HOME_EXPANDED_KEY } from "@/lib/use-collapsed-set";
 import { useGroups } from "@/lib/use-groups";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -35,9 +35,10 @@ export function PeopleGrid({ people }: Props) {
   const { t } = useLanguage();
   const [query, setQuery] = useState("");
 
-  // Per-card detail visibility, persisted on the device. Pruned against the
-  // full people list so deleted people's ids don't accumulate forever.
-  const { isCollapsed, toggle, prune, hydrated } = useCollapsedSet(HOME_COLLAPSED_KEY);
+  // Per-card detail visibility, persisted on the device. Cards default
+  // COLLAPSED; the set stores the ids the user has expanded. Pruned against
+  // the full people list so deleted people's ids don't accumulate forever.
+  const { has: isExpanded, toggle, prune, hydrated } = usePersistedIdSet(HOME_EXPANDED_KEY);
   useEffect(() => {
     if (hydrated) prune(people.map((p) => p.id));
   }, [hydrated, people, prune]);
@@ -165,7 +166,7 @@ export function PeopleGrid({ people }: Props) {
             <PersonCard
               key={person.id}
               person={person}
-              collapsed={hydrated && isCollapsed(person.id)}
+              collapsed={!isExpanded(person.id)}
               onToggleCollapse={() => toggle(person.id)}
             />
           ))}
