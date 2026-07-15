@@ -15,6 +15,11 @@ export interface PersonFull extends Person {
   attributes: PersonAttribute[];
   family_members: FamilyMemberFull[];
   meetings: Meeting[];
+  // Ids of the user's groups this person belongs to. Names/descriptions live in
+  // the separate group catalog (cached under META "groups") and are hydrated at
+  // render time — mirrors the calendar matchedPersonIds pattern. Cached copies
+  // written before this field existed may lack it: always read `?? []`.
+  group_ids: string[];
 }
 
 export interface FamilyMemberFull extends FamilyMember {

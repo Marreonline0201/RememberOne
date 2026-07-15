@@ -26,7 +26,7 @@ export async function getPersonFull(
 
   if (error || !person) return null;
 
-  const [attributesRes, familyRes, meetingsRes] = await Promise.all([
+  const [attributesRes, familyRes, meetingsRes, groupsRes] = await Promise.all([
     supabase
       .from("person_attributes")
       .select("*")
@@ -42,6 +42,10 @@ export async function getPersonFull(
       .select("*")
       .eq("person_id", personId)
       .order("meeting_date", { ascending: false }),
+    supabase
+      .from("person_groups")
+      .select("group_id")
+      .eq("person_id", personId),
   ]);
 
   const familyMembers: FamilyMemberFull[] = await Promise.all(
@@ -60,6 +64,7 @@ export async function getPersonFull(
     attributes: attributesRes.data ?? [],
     family_members: familyMembers,
     meetings: meetingsRes.data ?? [],
+    group_ids: (groupsRes.data ?? []).map((r: { group_id: string }) => r.group_id),
   };
 }
 
@@ -99,7 +104,7 @@ export async function getAllPeopleFull(
 
   const personIds = people.map((p: Person) => p.id);
 
-  const [attributesRes, familyRes, meetingsRes] = await Promise.all([
+  const [attributesRes, familyRes, meetingsRes, personGroupsRes] = await Promise.all([
     supabase
       .from("person_attributes")
       .select("*")
@@ -115,11 +120,17 @@ export async function getAllPeopleFull(
       .select("*")
       .in("person_id", personIds)
       .order("meeting_date", { ascending: false }),
+    supabase
+      .from("person_groups")
+      .select("person_id, group_id")
+      .in("person_id", personIds),
   ]);
 
   const attributes: PersonAttribute[] = attributesRes.data ?? [];
   const familyMembers: FamilyMember[] = familyRes.data ?? [];
   const meetings: Meeting[] = meetingsRes.data ?? [];
+  const personGroups: { person_id: string; group_id: string }[] =
+    personGroupsRes.data ?? [];
 
   let familyMemberAttributes: FamilyMemberAttribute[] = [];
   if (familyMembers.length > 0) {
@@ -144,6 +155,9 @@ export async function getAllPeopleFull(
         ),
       })),
     meetings: meetings.filter((m: Meeting) => m.person_id === person.id),
+    group_ids: personGroups
+      .filter((pg) => pg.person_id === person.id)
+      .map((pg) => pg.group_id),
   }));
 }
 

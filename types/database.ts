@@ -61,6 +61,21 @@ export interface FamilyMemberAttribute {
   updated_at: string;
 }
 
+export interface Group {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonGroup {
+  person_id: string;
+  group_id: string;
+  created_at: string;
+}
+
 export interface CalendarConnection {
   id: string;
   user_id: string;
