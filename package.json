@@ -21,6 +21,7 @@
     "cap:ios": "npx cap open ios"
   },
   "dependencies": {
+    "@capacitor-community/apple-sign-in": "^7.1.0",
     "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/android": "^8.2.0",
     "@capacitor/app": "^8.0.1",

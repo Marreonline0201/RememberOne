@@ -30,6 +30,81 @@ type OAuthProvider = "google" | "apple";
 // Apple effectively requires this (Guideline 4.8) because we offer Google login.
 const APPLE_SIGNIN_ENABLED = process.env.NEXT_PUBLIC_APPLE_SIGNIN === "1";
 
+// Where the system-browser OAuth leg returns to on native.
+// Android: verified HTTPS App Link (intent filter + assetlinks.json) hands the
+// URL to the app. iOS: the custom scheme registered in Info.plist
+// (CFBundleURLTypes) — no Universal Links are wired, and iOS doesn't reliably
+// fire them from server-side 302s anyway; a custom-scheme redirect does open
+// the app (after a one-tap system "Open in RememberOne?" confirm).
+const OAUTH_CALLBACK_ANDROID = "https://rememberone.online/auth/callback";
+const OAUTH_CALLBACK_IOS = "com.rememberone.app://auth/callback";
+
+const toHex = (bytes: Uint8Array) =>
+  Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+// Native Sign in with Apple, for iOS builds that ship the SignInWithApple
+// plugin: the OS sheet (Face ID) returns an identity token directly — no
+// browser, no return-leg redirect. Apple's request takes SHA-256(rawNonce);
+// Supabase takes the raw nonce and verifies the hash inside the token.
+// Throws on failure; the caller distinguishes "user canceled" from real errors.
+async function signInWithAppleNative(
+  supabase: ReturnType<typeof createClient>
+): Promise<void> {
+  const rawNonce = toHex(crypto.getRandomValues(new Uint8Array(32)));
+  const hashedNonce = toHex(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawNonce))
+    )
+  );
+
+  const { SignInWithApple } = await import(
+    "@capacitor-community/apple-sign-in"
+  );
+  const { response } = await SignInWithApple.authorize({
+    // clientId/redirectURI only matter on the plugin's Android/web paths;
+    // iOS ignores them, but the option types require values.
+    clientId: "com.rememberone.app",
+    redirectURI: OAUTH_CALLBACK_ANDROID,
+    scopes: "email name",
+    nonce: hashedNonce,
+  });
+  if (!response.identityToken) {
+    throw new Error("Apple did not return an identity token.");
+  }
+
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: response.identityToken,
+    nonce: rawNonce,
+  });
+  if (error) throw error;
+
+  // Apple sends the user's name ONLY on the very first authorization, and it
+  // arrives beside the token (never inside it), so the DB signup trigger
+  // can't see it — store it now, in auth metadata and on the profile row
+  // (own-row RLS UPDATE policy). Best-effort: never fail the login over it.
+  const fullName = [response.givenName, response.familyName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (fullName && data.user) {
+    try {
+      await supabase.auth.updateUser({ data: { full_name: fullName } });
+      await supabase
+        .from("profiles")
+        .update({ full_name: fullName })
+        .eq("id", data.user.id);
+    } catch {
+      /* name capture is best-effort */
+    }
+  }
+
+  await persistNativeSession(data.session);
+  // HARD navigation on sign-in (see the deep-link handler): never reuse the
+  // previous session's client runtime for a new identity.
+  window.location.assign("/");
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -65,12 +140,14 @@ export default function LoginPage() {
       if (!Capacitor.isNativePlatform()) return;
       import("@capacitor/app").then(({ App }) => {
         const handle = App.addListener("appUrlOpen", async ({ url }) => {
-          // Verified Android App Link only (P1-02). All OAuth callbacks
-          // arrive via https://rememberone.online/auth/callback through
-          // the autoVerify intent filter in AndroidManifest.xml +
-          // /.well-known/assetlinks.json. Legacy custom scheme removed
-          // in v9 after on-device verification confirmed routing.
-          if (!url.startsWith("https://rememberone.online/auth/callback")) {
+          // Two return legs land here: Android's verified App Link (P1-02,
+          // autoVerify intent filter + /.well-known/assetlinks.json) and
+          // iOS's custom scheme from Info.plist CFBundleURLTypes — iOS has
+          // no Universal Links, so the HTTPS form never reaches it.
+          if (
+            !url.startsWith(OAUTH_CALLBACK_ANDROID) &&
+            !url.startsWith(OAUTH_CALLBACK_IOS)
+          ) {
             return;
           }
 
@@ -128,19 +205,42 @@ export default function LoginPage() {
 
   async function handleOAuthSignIn(provider: OAuthProvider) {
     setOauthLoading(provider);
+
+    // Detect the platform in its own small try: ONLY "not native / Capacitor
+    // import failed" may fall through to the web flow below. A failure inside
+    // the native flow itself must NOT — Google rejects OAuth inside embedded
+    // WebViews (disallowed_useragent), so retrying the web flow in the app
+    // WebView can never succeed; it has to surface as a toast instead.
+    let platform: "ios" | "android" | null = null;
+    let appleSheetAvailable = false;
     try {
       const { Capacitor } = await import("@capacitor/core");
       if (Capacitor.isNativePlatform()) {
-        // Native: open in the system browser — Google rejects OAuth inside
-        // embedded WebViews (disallowed_useragent), and the system browser is
-        // the right path for Apple too. redirectTo uses the verified Android
-        // App Link (P1-02): Android routes the HTTPS callback to this app via
-        // the autoVerify intent filter in AndroidManifest.xml +
-        // /.well-known/assetlinks.json. (iOS return-leg is handled separately.)
+        platform = Capacitor.getPlatform() as "ios" | "android";
+        appleSheetAvailable = Capacitor.isPluginAvailable("SignInWithApple");
+      }
+    } catch {
+      platform = null;
+    }
+
+    if (platform) {
+      try {
+        if (provider === "apple" && platform === "ios" && appleSheetAvailable) {
+          // iOS builds that ship the plugin: native Apple sheet, no browser.
+          // On success this persists the session and hard-navigates to "/".
+          // Older TestFlight builds (no plugin) use the browser leg below.
+          await signInWithAppleNative(supabase);
+          return;
+        }
+
+        // System-browser leg. The return arrives as a deep link handled by
+        // the appUrlOpen listener above — Android via the verified App Link,
+        // iOS via the custom scheme.
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
-            redirectTo: "https://rememberone.online/auth/callback",
+            redirectTo:
+              platform === "ios" ? OAUTH_CALLBACK_IOS : OAUTH_CALLBACK_ANDROID,
             skipBrowserRedirect: true,
           },
         });
@@ -148,10 +248,23 @@ export default function LoginPage() {
         const { Browser } = await import("@capacitor/browser");
         await Browser.open({ url: data.url! });
         setOauthLoading(null);
-        return;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        // The native Apple sheet rejects with ASAuthorizationError.canceled
+        // (code 1001) when the user dismisses it — not an error, stay quiet.
+        if (!/1001|cancel/i.test(message)) {
+          toast({
+            title:
+              provider === "apple"
+                ? "Apple sign-in failed"
+                : "Google sign-in failed",
+            description: message || "Could not start the sign-in flow.",
+            variant: "destructive",
+          });
+        }
+        setOauthLoading(null);
       }
-    } catch {
-      // Not native or import failed — fall through to web flow
+      return;
     }
 
     // Web flow
