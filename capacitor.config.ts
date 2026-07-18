@@ -20,6 +20,10 @@ const config: CapacitorConfig = {
       style: "Default",
       backgroundColor: "#ffffff",
     },
+    LocalNotifications: {
+      // iOS: show pre-meeting notifications even while the app is foreground.
+      presentationOptions: ["badge", "sound", "banner", "list"],
+    },
   },
   android: {
     // No HTTP subresources on any page we load — enforce HTTPS-only.
