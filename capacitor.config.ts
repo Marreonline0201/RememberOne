@@ -28,6 +28,25 @@ const config: CapacitorConfig = {
   android: {
     // No HTTP subresources on any page we load — enforce HTTPS-only.
     allowMixedContent: false,
+    // Android plugin ALLOWLIST (overrides the package.json auto-detection).
+    // @capacitor-community/apple-sign-in is deliberately absent: Sign in with
+    // Apple is iOS-only in this app, and the plugin's v7-era Android
+    // build.gradle uses getDefaultProguardFile('proguard-android.txt'), which
+    // the current Android Gradle Plugin rejects — including it breaks the AAB
+    // build. NOTE: any NEW plugin must be added here too or Android won't
+    // ship it (iOS is unaffected — no iOS allowlist is set).
+    includePlugins: [
+      "@capacitor-community/speech-recognition",
+      "@capacitor/app",
+      "@capacitor/browser",
+      "@capacitor/filesystem",
+      "@capacitor/local-notifications",
+      "@capacitor/preferences",
+      "@capacitor/share",
+      "@capacitor/splash-screen",
+      "@capacitor/status-bar",
+      "@ebarooni/capacitor-calendar",
+    ],
   },
   ios: {
     contentInset: "always",
