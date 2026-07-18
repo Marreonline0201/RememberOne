@@ -46,6 +46,20 @@ workflows:
       - name: Install JS dependencies
         script: npm ci
 
+      - name: Patch apple-sign-in SPM manifest for Capacitor 8
+        script: |
+          # @capacitor-community/apple-sign-in 7.1.0 (latest) pins
+          # capacitor-swift-pm ^7 / iOS 14 in its Package.swift, which can never
+          # resolve against this app's exact 8.2.0 pin — SPM resolution fails and
+          # xcodebuild dies in -showBuildSettings with exit 74 ("Failed to show
+          # build settings"). The official 7->8 plugin migration for iOS is
+          # exactly these two manifest edits (capacitorjs.com/docs/updating/
+          # plugins/8-0); the plugin's Swift source only uses APIs unchanged in
+          # Capacitor 8. Drop this step once the plugin ships a Capacitor 8 major.
+          PKG=node_modules/@capacitor-community/apple-sign-in/Package.swift
+          sed -i '' -e 's/from: "7.0.0"/from: "8.0.0"/' -e 's/\.iOS(\.v14)/.iOS(.v15)/' "$PKG"
+          grep -q '"8.0.0"' "$PKG" || { echo "ERROR: SPM patch did not apply — check plugin version"; exit 1; }
+
       - name: Capacitor sync iOS (regenerates config + copies webDir)
         script: npx cap sync ios
 
@@ -149,6 +163,13 @@ workflows:
     scripts:
       - name: Install JS dependencies
         script: npm ci
+
+      - name: Patch apple-sign-in SPM manifest for Capacitor 8
+        script: |
+          # Same patch as the TestFlight workflow — see the comment there.
+          PKG=node_modules/@capacitor-community/apple-sign-in/Package.swift
+          sed -i '' -e 's/from: "7.0.0"/from: "8.0.0"/' -e 's/\.iOS(\.v14)/.iOS(.v15)/' "$PKG"
+          grep -q '"8.0.0"' "$PKG" || { echo "ERROR: SPM patch did not apply — check plugin version"; exit 1; }
 
       - name: Capacitor sync iOS (copies webDir + config)
         script: npx cap sync ios
