@@ -16,10 +16,19 @@ import { useCalendarConnect } from "@/lib/use-calendar-connect";
 import {
   useDismissFlag,
   useLocalFlag,
+  useLocalNumber,
   GOOGLE_PROMPT_KEY,
   DEVICE_PROMPT_KEY,
   TODAY_FIRST_KEY,
+  HOME_DAYS_AHEAD_KEY,
+  NOTIFY_MEETINGS_KEY,
+  NOTIFY_LEAD_KEY,
 } from "@/lib/use-dismiss-flag";
+import {
+  notificationsSupported,
+  ensureNotificationPermission,
+  cancelAllMeetingNotifications,
+} from "@/lib/meeting-notifications";
 import {
   getCachedProfile,
   getCachedConnectionFlag,
@@ -71,6 +80,19 @@ export function AccountPage() {
   const [calOpen, setCalOpen] = useState(false);
   const [isNative, setIsNative] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  // Home banner window + pre-meeting notification prefs (device-local).
+  const { value: daysAhead, setValue: setDaysAhead } = useLocalNumber(
+    HOME_DAYS_AHEAD_KEY,
+    7
+  );
+  const { on: notifyOn, setOn: setNotifyOn } = useLocalFlag(NOTIFY_MEETINGS_KEY);
+  const { value: leadMin, setValue: setLeadMin } = useLocalNumber(
+    NOTIFY_LEAD_KEY,
+    30
+  );
+  // Whether THIS build ships the LocalNotifications plugin (new native builds
+  // only — old installs show the toggle disabled with an update hint).
+  const [notifSupported, setNotifSupported] = useState(false);
   // Reflect a disconnect immediately. The connection prop is server-rendered and
   // the service worker caches that RSC (StaleWhileRevalidate), so router.refresh()
   // alone can keep showing "Connected" until a later load — this override flips
@@ -100,7 +122,26 @@ export function AccountPage() {
     import("@capacitor/core")
       .then(({ Capacitor }) => setIsNative(Capacitor.isNativePlatform()))
       .catch(() => {});
+    void notificationsSupported().then(setNotifSupported);
   }, []);
+
+  async function handleNotifyToggle() {
+    if (notifyOn) {
+      setNotifyOn(false);
+      void cancelAllMeetingNotifications();
+      return;
+    }
+    const granted = await ensureNotificationPermission();
+    if (!granted) {
+      toast({
+        title: t("calendar.notify_toggle"),
+        description: t("calendar.notify_denied"),
+        variant: "destructive",
+      });
+      return;
+    }
+    setNotifyOn(true);
+  }
 
   async function handleDisconnect() {
     setDisconnecting(true);
@@ -551,6 +592,113 @@ export function AccountPage() {
                 />
               </button>
             </div>
+
+            {/* Home banner window: how many days ahead of meetings to show */}
+            <div>
+              <p className="text-sm font-medium" style={{ color: "#284e72" }}>
+                {t("calendar.days_ahead")}
+              </p>
+              <p className="text-[11px] mt-0.5" style={{ color: "#5e7983" }}>
+                {t("calendar.days_ahead_hint")}
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {[1, 3, 7, 14, 31].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDaysAhead(d)}
+                    className="h-8 px-3 text-[12px] rounded-[8px_2px_8px_2px] transition-opacity active:opacity-80"
+                    style={
+                      daysAhead === d
+                        ? {
+                            background: "linear-gradient(to right, #284e72, #482d7c)",
+                            color: "#ffffff",
+                          }
+                        : {
+                            backgroundColor: "#f0e8ff",
+                            border: "1px solid #dccaff",
+                            color: "#284e72",
+                          }
+                    }
+                  >
+                    {t(`calendar.days_${d}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Pre-meeting phone notification — native only. On builds without
+                the LocalNotifications plugin the toggle is disabled with an
+                update hint (this web bundle also serves old installs). */}
+            {isNative && (
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium" style={{ color: "#284e72" }}>
+                      {t("calendar.notify_toggle")}
+                    </p>
+                    <p className="text-[11px] mt-0.5" style={{ color: "#5e7983" }}>
+                      {notifSupported
+                        ? t("calendar.notify_toggle_hint")
+                        : t("calendar.notify_requires_update")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={notifyOn && notifSupported}
+                    aria-label={t("calendar.notify_toggle")}
+                    onClick={handleNotifyToggle}
+                    disabled={!notifSupported}
+                    className="relative shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-50"
+                    style={{
+                      backgroundColor:
+                        notifyOn && notifSupported ? "#284e72" : "#cdbce8",
+                    }}
+                  >
+                    <span
+                      className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                      style={{
+                        transform:
+                          notifyOn && notifSupported
+                            ? "translateX(20px)"
+                            : "translateX(0)",
+                      }}
+                    />
+                  </button>
+                </div>
+                {notifyOn && notifSupported && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="text-[11px]" style={{ color: "#5e7983" }}>
+                      {t("calendar.notify_lead")}
+                    </span>
+                    {[10, 30, 60].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setLeadMin(m)}
+                        className="h-8 px-3 text-[12px] rounded-[8px_2px_8px_2px] transition-opacity active:opacity-80"
+                        style={
+                          leadMin === m
+                            ? {
+                                background:
+                                  "linear-gradient(to right, #284e72, #482d7c)",
+                                color: "#ffffff",
+                              }
+                            : {
+                                backgroundColor: "#f0e8ff",
+                                border: "1px solid #dccaff",
+                                color: "#284e72",
+                              }
+                        }
+                      >
+                        {t(`calendar.lead_${m}`)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

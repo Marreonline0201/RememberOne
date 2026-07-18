@@ -257,6 +257,38 @@ const keys: Translations = {
     en: "Show the selected day right below the calendar, above Upcoming.",
     ko: "선택한 날짜를 캘린더 바로 아래, 예정된 만남 위에 표시합니다.",
   },
+  // Home upcoming-meetings banner + its settings
+  "meetings.upcoming": { en: "Upcoming meetings", ko: "예정된 만남" },
+  "meetings.collapse": { en: "Collapse meetings", ko: "만남 접기" },
+  "meetings.expand": { en: "Expand meetings", ko: "만남 펼치기" },
+  "calendar.days_ahead": { en: "Show meetings for", ko: "만남 표시 기간" },
+  "calendar.days_ahead_hint": {
+    en: "How far ahead the home screen lists meetings.",
+    ko: "홈 화면에 며칠 뒤 만남까지 표시할지 정합니다.",
+  },
+  "calendar.days_1": { en: "1 day", ko: "1일" },
+  "calendar.days_3": { en: "3 days", ko: "3일" },
+  "calendar.days_7": { en: "7 days", ko: "7일" },
+  "calendar.days_14": { en: "14 days", ko: "14일" },
+  "calendar.days_31": { en: "31 days", ko: "31일" },
+  "calendar.notify_toggle": { en: "Notify before meetings", ko: "만남 전 알림" },
+  "calendar.notify_toggle_hint": {
+    en: "A phone notification before each upcoming meeting.",
+    ko: "예정된 만남 전에 휴대폰 알림을 보냅니다.",
+  },
+  "calendar.notify_lead": { en: "Notify me", ko: "알림 시점" },
+  "calendar.lead_10": { en: "10 min before", ko: "10분 전" },
+  "calendar.lead_30": { en: "30 min before", ko: "30분 전" },
+  "calendar.lead_60": { en: "1 hour before", ko: "1시간 전" },
+  "calendar.notify_requires_update": {
+    en: "Update the app to use meeting notifications.",
+    ko: "만남 알림을 사용하려면 앱을 업데이트하세요.",
+  },
+  "calendar.notify_denied": {
+    en: "Notifications are blocked. Allow them in your phone's settings.",
+    ko: "알림이 차단되어 있어요. 휴대폰 설정에서 허용해 주세요.",
+  },
+  "notif.meeting_title": { en: "Meeting with {name}", ko: "{name}님과의 만남" },
   // Calendar — add/edit meeting dialog
   "calendar.add_meeting": { en: "Add meeting", ko: "만남 추가" },
   "calendar.edit_meeting": { en: "Edit meeting", ko: "만남 수정" },

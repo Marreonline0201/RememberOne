@@ -23,6 +23,7 @@ import type { PersonFull } from "@/types/app";
 import { ensureOfflineOwner } from "@/lib/offline-owner";
 import { warmPaths } from "@/lib/offline-warm";
 import { WarmingProgress } from "@/components/WarmingProgress";
+import { registerNotificationTapHandler } from "@/lib/meeting-notifications";
 
 interface Props {
   userId: string;
@@ -120,6 +121,18 @@ export function PeopleListClient({
     const t = setTimeout(() => void warmPaths(paths, 2), 300);
     return () => clearTimeout(t);
   }, [people]);
+
+  // Tapping a pre-meeting notification (native) opens that person's profile.
+  // No-op on web and on builds without the LocalNotifications plugin.
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void registerNotificationTapHandler((path) => {
+      window.location.assign(path);
+    }).then((c) => {
+      cleanup = c;
+    });
+    return () => cleanup?.();
+  }, []);
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
