@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { clearNativeSession } from "@/lib/native-auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
-import { LogOut, Loader2, Trash2, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink, WifiOff, Sparkles } from "lucide-react";
+import { LogOut, Loader2, Trash2, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp, ChevronRight, ScrollText, Baby, Languages, Check, Globe, Search, Calendar, Link2, Unlink, WifiOff, Sparkles, HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -38,6 +38,7 @@ import {
 import { wipeLocalUserData, whenOwnerSettled } from "@/lib/offline-owner";
 import { languages, type LanguageCode } from "@/lib/i18n";
 import { useAiConsent } from "@/components/AiConsentProvider";
+import { useTour } from "@/components/tour/TourProvider";
 
 // Fallback if the WebView lacks Intl.supportedValuesOf (Chrome <99).
 const FALLBACK_ZONES = [
@@ -55,6 +56,7 @@ export function AccountPage() {
   const { language, setLanguage, t } = useLanguage();
   const { timezone, mode: tzMode, value: tzValue, setMode: setTzMode, setTimezone } = useTimezone();
   const { consented: aiConsented, revokeConsent } = useAiConsent();
+  const { startTour } = useTour();
   const [revokingConsent, setRevokingConsent] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -733,6 +735,26 @@ export function AccountPage() {
             {ko ? "오프라인에서는 로그아웃할 수 없어요" : "Signing out needs a connection"}
           </p>
         )}
+      </div>
+
+      {/* How to use this app — replays the first-open tour */}
+      <div
+        className="rounded-[10px_2px_10px_2px] border overflow-hidden"
+        style={{ borderColor: "#dccaff", backgroundColor: "#f5f0ff" }}
+      >
+        <button
+          type="button"
+          onClick={() => startTour()}
+          data-tour="account-help"
+          className="flex items-center justify-between w-full h-11 px-4 text-sm transition-opacity active:opacity-80"
+          style={{ color: "#284e72" }}
+        >
+          <span className="flex items-center gap-3">
+            <HelpCircle className="w-4 h-4 shrink-0" />
+            {t("account.how_to_use")}
+          </span>
+          <ChevronRight className="w-4 h-4 shrink-0" />
+        </button>
       </div>
 
       {/* Policy */}

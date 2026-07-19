@@ -121,7 +121,7 @@ export function UpcomingMeetingAlert() {
   if (visibleAlerts.length === 0) return null;
 
   return (
-    <div className="space-y-2">
+    <div data-tour="home-banner" className="space-y-2">
       {/* Section header: count + collapse toggle for the whole banner */}
       <button
         type="button"

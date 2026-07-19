@@ -9,12 +9,15 @@ interface LanguageContextType {
   language: LanguageCode;
   setLanguage: (lang: LanguageCode) => Promise<void>;
   t: (key: string) => string;
+  /** True while the first-run language picker is on screen (tour waits on it). */
+  pickerOpen: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType>({
   language: "en",
   setLanguage: async () => {},
   t: (key) => key,
+  pickerOpen: false,
 });
 
 export function useLanguage() {
@@ -56,8 +59,8 @@ export function LanguageProvider({
   // Memoize so consumers (the <T> component, CalendarView, …) don't re-render on
   // every unrelated parent render — only when language actually changes.
   const value = useMemo(
-    () => ({ language, setLanguage, t }),
-    [language, setLanguage, t]
+    () => ({ language, setLanguage, t, pickerOpen: showPicker }),
+    [language, setLanguage, t, showPicker]
   );
 
   return (

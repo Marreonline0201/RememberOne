@@ -806,7 +806,7 @@ export function ConversationInput({ personId, personName }: Props) {
 
       {/* Big circle mic button */}
       <div className="flex flex-col items-center justify-center flex-1 gap-5 py-10">
-        <div className="relative">
+        <div data-tour="meet-record" className="relative">
           {recording && (
             <>
               <span
