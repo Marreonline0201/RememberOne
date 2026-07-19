@@ -15,7 +15,9 @@ import type { TourPhase, TourStep } from "@/lib/tour-steps";
 const SPOT_PAD = 8;
 const CARD_GAP = 14;
 const CARD_EST_H = 220; // rough card height used only for placement flipping
-const HEADER_SAFE = 92; // fixed mobile header (80px) + breathing room
+// Fallback when the fixed mobile header isn't in the DOM; the live value is
+// measured from the header itself so notch safe-area insets are included.
+const HEADER_SAFE_FALLBACK = 92;
 
 interface TourOverlayProps {
   step: TourStep;
@@ -38,7 +40,10 @@ function useReducedMotion() {
 }
 
 // Live viewport rect of the anchor: scrolls it into view once, then follows
-// window scroll/resize and element resizes, rAF-throttled.
+// window scroll/resize and element resizes, rAF-throttled. React re-renders
+// can REPLACE the anchor's DOM node, so every measure re-queries when the
+// bound node has left the document (a detached node reports a 0x0 rect,
+// which would collapse the spotlight to a sliver).
 function useAnchorRect(selector: string | null, reducedMotion: boolean) {
   const [rect, setRect] = useState<DOMRect | null>(null);
 
@@ -47,7 +52,7 @@ function useAnchorRect(selector: string | null, reducedMotion: boolean) {
       setRect(null);
       return;
     }
-    const el = document.querySelector(selector);
+    let el = document.querySelector(selector);
     if (!el) {
       setRect(null);
       return;
@@ -57,8 +62,20 @@ function useAnchorRect(selector: string | null, reducedMotion: boolean) {
       behavior: reducedMotion ? "auto" : "smooth",
     });
     let raf = 0;
+    const ro = new ResizeObserver(() => schedule());
     const measure = () => {
       raf = 0;
+      if (!el || !el.isConnected) {
+        const next = document.querySelector(selector);
+        if (next) {
+          el = next;
+          ro.disconnect();
+          ro.observe(next);
+        } else {
+          setRect(null); // anchor gone for good → centered card
+          return;
+        }
+      }
       setRect(el.getBoundingClientRect());
     };
     const schedule = () => {
@@ -67,7 +84,6 @@ function useAnchorRect(selector: string | null, reducedMotion: boolean) {
     measure();
     window.addEventListener("resize", schedule);
     window.addEventListener("scroll", schedule, true);
-    const ro = new ResizeObserver(schedule);
     ro.observe(el);
     return () => {
       window.removeEventListener("resize", schedule);
@@ -141,6 +157,14 @@ export function TourOverlay({
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  // Real bottom edge of the fixed mobile header (includes safe-top inset on
+  // notched phones); 0-height when hidden on desktop.
+  const headerRect = document
+    .querySelector("header.safe-top")
+    ?.getBoundingClientRect();
+  const headerSafe = headerRect?.height
+    ? headerRect.bottom + 8
+    : HEADER_SAFE_FALLBACK;
 
   // Spotlight box (clamped so tall anchors don't swallow the screen).
   let box: { top: number; left: number; width: number; height: number } | null =
@@ -176,7 +200,7 @@ export function TourOverlay({
     if (below && box.top + box.height + CARD_GAP + CARD_EST_H > vh - 16) {
       below = false;
     }
-    if (!below && box.top - CARD_GAP - CARD_EST_H < HEADER_SAFE) {
+    if (!below && box.top - CARD_GAP - CARD_EST_H < headerSafe) {
       below = true;
     }
     cardStyle = below

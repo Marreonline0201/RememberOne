@@ -108,7 +108,10 @@ export function UpcomingMeetingAlert() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openMenu]);
 
-  if (loading || alerts.length === 0) return null;
+  // Invisible marker while the events fetch runs: tells the first-open tour
+  // "the banner may still appear — keep waiting" instead of fast-skipping.
+  if (loading) return <div data-tour="home-banner-pending" hidden />;
+  if (alerts.length === 0) return null;
 
   // Display filter: dismissed rows out, and only meetings inside the user's
   // chosen window (the fetch may span further for notification scheduling).

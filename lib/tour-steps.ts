@@ -23,6 +23,12 @@ export interface TourStep {
   anchors: string[];
   /** What to do when no candidate appears within the timeout. */
   fallback: "center" | "skip";
+  /**
+   * While this selector exists in the DOM the anchor may still be coming
+   * (e.g. a component that renders a marker during its fetch) — the wait
+   * uses the full timeout instead of the fast-skip window.
+   */
+  pendingAnchor?: string;
   placement: "below" | "above" | "center" | "auto";
   titleKey: string;
   bodyKey: string;
@@ -51,9 +57,11 @@ export const TOUR_STEPS: TourStep[] = [
     id: "meetings",
     route: "/",
     // Banner only exists with a calendar connection + matched meetings; for
-    // everyone else this step disappears silently (fallback: "skip").
+    // everyone else this step disappears silently (fallback: "skip"). The
+    // pending marker keeps the wait alive while the banner's fetch runs.
     anchors: ['[data-tour="home-banner"]'],
     fallback: "skip",
+    pendingAnchor: '[data-tour="home-banner-pending"]',
     placement: "below",
     titleKey: "tour.step_banner_title",
     bodyKey: "tour.step_banner_body",

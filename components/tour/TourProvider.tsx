@@ -67,11 +67,15 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   // Latch so the auto-launch can only ever fire once per page load.
   const launchedRef = useRef(false);
   // Per-step bookkeeping: the route we were on when the step began (so the
-  // in-flight controller navigation isn't mistaken for the user leaving).
+  // in-flight controller navigation isn't mistaken for the user leaving),
+  // whether our push was ever observed committed, and the wait clock —
+  // which must NOT reset when the effect re-runs on a pathname change.
   const stepEntryRef = useRef<{
     index: number;
     origin: string;
     pushed: boolean;
+    committed: boolean;
+    startedAt: number;
   } | null>(null);
   const prevEndedRef = useRef<typeof state.ended>(undefined);
 
@@ -111,6 +115,9 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     if (pathname !== "/" || pickerOpen) return;
     const timer = setTimeout(() => {
       if (launchedRef.current) return;
+      // The user may have navigated inside the settle window — re-check the
+      // live location, not the pathname captured when the timer was armed.
+      if (window.location.pathname !== "/") return;
       launchedRef.current = true;
       // Stamped at launch, not completion: an app kill mid-tour must never
       // re-trap the user in a launch loop (resume covers continuation).
@@ -126,19 +133,22 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     if (!state.active || state.phase !== "waiting") return;
     const step = TOUR_STEPS[state.stepIndex];
     if (!stepEntryRef.current || stepEntryRef.current.index !== state.stepIndex) {
-      stepEntryRef.current = { index: state.stepIndex, origin: pathname, pushed: false };
+      stepEntryRef.current = {
+        index: state.stepIndex,
+        origin: pathname,
+        pushed: false,
+        committed: false,
+        startedAt: performance.now(),
+      };
     }
     const entry = stepEntryRef.current;
     if (pathname !== step.route && !entry.pushed) {
       entry.pushed = true;
       router.push(step.route);
     }
-    // Optional same-page anchors (the meetings banner) resolve fast — it's
-    // either mounted or gated off entirely; don't hold everyone else 4s.
-    const timeoutMs = step.fallback === "skip" ? 400 : ANCHOR_TIMEOUT_MS;
-    const startedAt = performance.now();
     const tick = (): boolean => {
       if (window.location.pathname === step.route) {
+        entry.committed = true;
         if (step.anchors.length === 0) {
           setMatchedSelector(null);
           dispatch({ type: "ANCHOR_FOUND" });
@@ -150,15 +160,37 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
             const r = el.getBoundingClientRect();
             if (r.width > 0 && r.height > 0) {
               setMatchedSelector(sel);
+              // A skip-fallback step that actually materialized belongs in
+              // the progress dots.
+              if (step.fallback === "skip") setBannerIncluded(true);
               dispatch({ type: "ANCHOR_FOUND" });
               return true;
             }
           }
         }
+      } else if (entry.committed) {
+        // We saw our navigation land and now we're somewhere else — the user
+        // backed out mid-wait. Dismiss immediately instead of letting the
+        // scrim block the app until the timeout.
+        dispatch({ type: "ROUTE_CHANGED", pathname: window.location.pathname });
+        return true;
       }
-      if (performance.now() - startedAt > timeoutMs) {
+      // Optional same-page anchors (the meetings banner) resolve fast unless
+      // their pending marker says a fetch is still in flight.
+      const pending =
+        step.pendingAnchor && document.querySelector(step.pendingAnchor);
+      const timeoutMs =
+        step.fallback === "skip" && !pending ? 400 : ANCHOR_TIMEOUT_MS;
+      if (performance.now() - entry.startedAt > timeoutMs) {
         setMatchedSelector(null);
-        dispatch({ type: "ANCHOR_TIMEOUT" });
+        if (window.location.pathname !== step.route) {
+          // Never reached the step's route (offline / popped navigation):
+          // showing this step's card on the wrong page would be worse than
+          // bowing out with the replay toast.
+          dispatch({ type: "ROUTE_CHANGED", pathname: window.location.pathname });
+        } else {
+          dispatch({ type: "ANCHOR_TIMEOUT" });
+        }
         return true;
       }
       return false;
@@ -226,9 +258,10 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
   const step = TOUR_STEPS[state.stepIndex];
   // Progress dots cover the coach-mark steps (not the hero cards); the
-  // meetings step counts only when its banner was present at start.
+  // meetings step counts when its banner was present at start OR it is the
+  // step actually being shown (replay/resume paths can't pre-query it).
   const dotSteps = TOUR_STEPS.slice(1, TOUR_STEPS.length - 1).filter(
-    (s) => s.fallback !== "skip" || bannerIncluded
+    (s) => s.fallback !== "skip" || bannerIncluded || s.id === step.id
   );
   const rawDotIndex = dotSteps.findIndex((s) => s.id === step.id);
   const dotIndex =
