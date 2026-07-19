@@ -90,6 +90,11 @@ export function PeopleGrid({ people }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Tour anchor: chips + search spotlighted as one "find people" block.
+          Pre-hydration it can be momentarily empty; empty:hidden removes the
+          empty box (the sibling space-y gap it leaves is a one-frame 16px
+          shift, accepted). */}
+      <div data-tour="home-tools" className="space-y-4 empty:hidden">
       {/* Group filter chips: [All] [group…] [+ manage] */}
       {groupsHydrated && (
         <div>
@@ -158,6 +163,7 @@ export function PeopleGrid({ people }: Props) {
           )}
         </div>
       )}
+      </div>
 
       {/* People — single column, phone-first */}
       {filtered.length > 0 ? (

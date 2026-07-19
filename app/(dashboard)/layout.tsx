@@ -6,6 +6,7 @@ import { OfflineSyncProvider } from "@/components/OfflineSyncProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { TimezoneProvider } from "@/contexts/TimezoneContext";
 import { AiConsentProvider } from "@/components/AiConsentProvider";
+import { TourProvider } from "@/components/tour/TourProvider";
 
 export default async function DashboardLayout({
   children,
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
     <LanguageProvider initialLanguage={initialLanguage}>
       <TimezoneProvider initialMode={initialTzMode} initialValue={initialTzValue}>
         <AiConsentProvider initialConsented={initialConsented}>
+          <TourProvider>
           <div className="min-h-screen bg-background">
             <DashboardNav user={user} />
             {/*
@@ -48,6 +50,7 @@ export default async function DashboardLayout({
               {children}
             </main>
           </div>
+          </TourProvider>
         </AiConsentProvider>
       </TimezoneProvider>
     </LanguageProvider>

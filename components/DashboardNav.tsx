@@ -77,7 +77,7 @@ export function DashboardNav({ user }: Props) {
         <div className="flex-1" />
 
         {/* Avatar → account page */}
-        <Link href="/account" prefetch aria-label="Account">
+        <Link href="/account" prefetch aria-label="Account" data-tour="nav-account">
           {avatarFallback}
         </Link>
       </div>
@@ -99,7 +99,13 @@ export function DashboardNav({ user }: Props) {
         </span>
 
         {/* Avatar → account page */}
-        <Link href="/account" prefetch className="absolute right-4" aria-label="Account">
+        <Link
+          href="/account"
+          prefetch
+          className="absolute right-4"
+          aria-label="Account"
+          data-tour="nav-account"
+        >
           {avatarFallback}
         </Link>
       </div>
@@ -119,6 +125,7 @@ export function DashboardNav({ user }: Props) {
           prefetch
           className="flex items-center justify-center flex-1"
           aria-label="People"
+          data-tour="nav-people"
         >
           <Users
             className={`w-5 h-5 ${pathname === "/" ? "text-primary" : "text-muted-foreground"}`}
@@ -131,6 +138,7 @@ export function DashboardNav({ user }: Props) {
           prefetch
           className="flex items-center justify-center flex-1"
           aria-label="Log a meeting"
+          data-tour="nav-meet"
         >
           <div
             className="w-[52px] h-[52px] rounded-full p-[2.5px] shadow-md"
@@ -151,6 +159,7 @@ export function DashboardNav({ user }: Props) {
           prefetch
           className="flex items-center justify-center flex-1"
           aria-label="Calendar"
+          data-tour="nav-calendar"
         >
           <CalendarDays
             className={`w-5 h-5 ${

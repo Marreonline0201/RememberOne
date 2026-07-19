@@ -130,6 +130,10 @@ const keys: Translations = {
     en: "Child Safety Standards",
     ko: "아동 안전 기준",
   },
+  "account.how_to_use": {
+    en: "How to use this app",
+    ko: "앱 사용 방법",
+  },
 
   // Home page empty state
   "home.empty_title": { en: "No one here yet", ko: "아직 아무도 없어요" },
@@ -658,6 +662,55 @@ const keys: Translations = {
   "child.contact.body": {
     en: "For child safety concerns or questions about our standards, contact our designated safety officer at comgamemarre@gmail.com",
     ko: "아동 안전 우려 사항이나 기준에 관한 질문은 지정된 안전 담당자에게 comgamemarre@gmail.com으로 연락해 주세요.",
+  },
+
+  // First-open tour (coach marks)
+  "tour.welcome_title": {
+    en: "Welcome to Remember One",
+    ko: "Remember One에 오신 걸 환영해요",
+  },
+  "tour.welcome_body": {
+    en: "Never forget the people you meet. Speak a few words after a meeting, and AI remembers every detail for you.",
+    ko: "만나는 사람들을 잊지 않게 도와드려요. 만남이 끝나고 몇 마디만 말하면, AI가 세부 정보를 대신 기억해 드려요.",
+  },
+  "tour.welcome_cta": { en: "SHOW ME AROUND", ko: "둘러보기" },
+  "tour.skip": { en: "Skip", ko: "건너뛰기" },
+  "tour.next": { en: "Next", ko: "다음" },
+  "tour.progress": { en: "Step {n} of {m}", ko: "{m}단계 중 {n}단계" },
+  "tour.step_people_title": { en: "Your people", ko: "만난 사람들" },
+  "tour.step_people_body": {
+    en: "Everyone you log lives here. Use groups and search to find anyone fast.",
+    ko: "기록한 사람들이 모두 여기에 모여요. 그룹과 검색으로 누구든 빠르게 찾을 수 있어요.",
+  },
+  "tour.step_banner_title": { en: "Upcoming meetings", ko: "다가오는 만남" },
+  "tour.step_banner_body": {
+    en: "Meetings with your people show up here, so you can prep before you go.",
+    ko: "등록한 사람들과의 만남이 여기에 표시돼요. 만나기 전에 미리 준비할 수 있어요.",
+  },
+  "tour.step_record_title": { en: "Just talk", ko: "말만 하세요" },
+  "tour.step_record_body": {
+    en: "Tap the mic and describe who you met. AI saves the name, job, family — everything.",
+    ko: "마이크를 누르고 만난 사람에 대해 이야기해 보세요. 이름, 직업, 가족까지 AI가 알아서 저장해요.",
+  },
+  "tour.step_calendar_title": { en: "Your calendar", ko: "캘린더" },
+  "tour.step_calendar_body": {
+    en: "Logged meetings appear on this calendar. Connect Google Calendar to see what's coming up too.",
+    ko: "기록한 만남이 캘린더에 표시돼요. Google 캘린더를 연결하면 다가오는 일정도 함께 볼 수 있어요.",
+  },
+  "tour.step_settings_title": { en: "Settings live here", ko: "설정은 여기에서" },
+  "tour.step_settings_body": {
+    en: "Tap your photo up top anytime to get here. You can replay this tour from this row.",
+    ko: "언제든 위쪽 프로필 사진을 누르면 이 화면이 열려요. 이 메뉴에서 투어를 다시 볼 수 있어요.",
+  },
+  "tour.done_title": { en: "You're all set", ko: "준비 완료!" },
+  "tour.done_body": {
+    en: "Met someone new? Tap the mic and just talk — Remember One does the rest.",
+    ko: "새로운 사람을 만났나요? 마이크를 누르고 말만 하세요. 나머지는 Remember One이 알아서 해요.",
+  },
+  "tour.done_cta": { en: "GET STARTED", ko: "시작하기" },
+  "tour.dismissed_toast": {
+    en: "Replay anytime from Settings",
+    ko: "설정에서 언제든 다시 볼 수 있어요",
   },
 };
 

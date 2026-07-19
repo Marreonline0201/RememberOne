@@ -740,6 +740,7 @@ export function CalendarView() {
 
       {/* ── Monthly calendar grid ── */}
       <div
+        data-tour="calendar-grid"
         className="rounded-2xl p-4"
         style={{ background: "linear-gradient(135deg, #d0f2ff 0%, #dccaff 100%)" }}
       >

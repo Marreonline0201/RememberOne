@@ -140,7 +140,10 @@ export function PeopleListClient({
       {hasCalendarConnection && people.length > 0 && <UpcomingMeetingAlert />}
 
       {people.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center gap-5">
+        <div
+          data-tour="home-empty"
+          className="flex flex-col items-center justify-center py-24 text-center gap-5"
+        >
           <div
             className="w-24 h-24 rounded-full flex items-center justify-center"
             style={{ background: "linear-gradient(135deg, #d0f2ff, #dccaff)" }}
