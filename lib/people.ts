@@ -230,8 +230,11 @@ export async function saveExtractionResult(
         .ilike("name", fm.name)
         .maybeSingle();
 
-      // 2. If no match, look for a placeholder with the same relation to merge into
-      if (!existingFm) {
+      // 2. If no match, look for a placeholder with the same relation to merge into.
+      //    Only when the incoming name is a REAL name — otherwise numbered
+      //    placeholders ("Son 1", "Son 2") would overwrite each other and a
+      //    "two sons" extraction would collapse into a single "Son 2".
+      if (!existingFm && !isRelationPlaceholder(fm.name, fm.relation)) {
         const { data: sameRelation } = await supabase
           .from("family_members")
           .select("id, name")
