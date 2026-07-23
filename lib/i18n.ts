@@ -664,6 +664,11 @@ const keys: Translations = {
     ko: "아동 안전 우려 사항이나 기준에 관한 질문은 지정된 안전 담당자에게 comgamemarre@gmail.com으로 연락해 주세요.",
   },
 
+  "meet.person_write_placeholder": {
+    en: "Type what you learned — job, family, plans…",
+    ko: "알게 된 내용을 입력하세요 — 직업, 가족, 계획 등",
+  },
+
   // First-open tour (coach marks)
   "tour.welcome_title": {
     en: "Welcome to Remember One",

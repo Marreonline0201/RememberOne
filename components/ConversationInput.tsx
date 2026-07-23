@@ -37,6 +37,7 @@ import { getLanguage } from "@/lib/i18n";
 import { localizeKey, cn } from "@/lib/utils";
 import { useOnline } from "@/lib/use-online";
 import { MeetModeToggle } from "@/components/MeetModeToggle";
+import { Textarea } from "@/components/ui/textarea";
 import { AiLoadingState } from "@/components/AiLoadingState";
 import { AiSuccessState } from "@/components/AiSuccessState";
 import { useAiConsent } from "@/components/AiConsentProvider";
@@ -86,6 +87,9 @@ export function ConversationInput({ personId, personName }: Props) {
 
   // person-specific mode
   const isPerson = !!(personId && personName);
+  // Person mode's Speak/Write switch: "write" swaps the mic for a textarea on
+  // this same screen (general mode navigates to /meet/write instead).
+  const [inputMode, setInputMode] = useState<"speak" | "write">("speak");
 
   const [step, setStep] = useState<Step>("input");
   const isLoading = step === "loading";
@@ -759,6 +763,9 @@ export function ConversationInput({ personId, personName }: Props) {
   // ── INPUT ────────────────────────────────────────────────────────────────
   const micDisabled = isLoading || transcribing || !online;
   const showSubmit = text.trim().length > 0 && !recording && !transcribing;
+  // Person mode can swap the voice UI for a typing UI; general mode is always
+  // voice here (typing lives on /meet/write).
+  const speakUi = !isPerson || inputMode === "speak";
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-200px)]">
@@ -788,6 +795,16 @@ export function ConversationInput({ personId, personName }: Props) {
               {personName}
             </p>
           </div>
+          {/* In-place Speak / Write switch (no navigation in person mode).
+              Switching away from Speak mid-recording stops the recorder —
+              a hot mic must never keep running under the typing UI. */}
+          <MeetModeToggle
+            active={inputMode}
+            onSelect={(mode) => {
+              if (mode === "write" && recording) stopRecording();
+              setInputMode(mode);
+            }}
+          />
         </div>
       )}
 
@@ -804,8 +821,10 @@ export function ConversationInput({ personId, personName }: Props) {
         }
       </p>
 
-      {/* Big circle mic button */}
+      {/* Big circle mic button (speak) or textarea (person-mode write) */}
       <div className="flex flex-col items-center justify-center flex-1 gap-5 py-10">
+        {speakUi ? (
+        <>
         <div data-tour="meet-record" className="relative">
           {recording && (
             <>
@@ -909,6 +928,24 @@ export function ConversationInput({ personId, personName }: Props) {
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+        </>
+        ) : (
+          /* Person-mode write: same `text` state, same save pipeline. Keeping
+             finalsRef in sync means switching back to Speak appends dictation
+             after the typed text instead of resurrecting stale voice finals. */
+          <Textarea
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              finalsRef.current = [e.target.value];
+            }}
+            placeholder={t("meet.person_write_placeholder")}
+            rows={6}
+            autoFocus
+            className="w-full text-base rounded-[10px_2px_10px_2px]"
+            style={{ backgroundColor: "#f0e8ff", borderColor: "#dccaff" }}
+          />
         )}
 
         {/* Meeting type toggle — person mode only */}
