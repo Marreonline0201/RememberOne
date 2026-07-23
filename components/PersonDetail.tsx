@@ -3,12 +3,12 @@
 // Client-rendered person detail. Loads from the local store (instant + offline)
 // and refreshes from /api/people/[id] when online (skipping the refresh while
 // writes are pending so it can't clobber un-synced edits). Editing works
-// OFFLINE via the write queue; only the AI flows (Log meeting, AI quick-note,
-// voice transcription) stay online-only.
+// OFFLINE via the write queue; only the AI flow (Log meeting — voice or typed)
+// stays online-only.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Mic } from "lucide-react";
+import { Mic, PenLine } from "lucide-react";
 import { BackButton } from "@/components/BackButton";
 import type { PersonFull } from "@/types/app";
 import {
@@ -26,7 +26,6 @@ import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { EditableName } from "@/components/EditableName";
 import { ProfileEditor } from "@/components/ProfileEditor";
-import { AddNotesInput } from "@/components/AddNotesInput";
 import { AddFamilyMemberForm } from "@/components/AddFamilyMemberForm";
 import { FamilyMemberCard } from "@/components/FamilyMemberCard";
 import { DeletePersonButton } from "@/components/DeletePersonButton";
@@ -280,27 +279,21 @@ export function PersonDetail({ id }: { id: string }) {
         initialGroupIds={person.group_ids ?? []}
       />
 
-      {/* ── AI flows — online only (Log meeting + AI quick-note) ───────────── */}
+      {/* ── AI flow — online only. Log meeting handles BOTH voice and typing
+             now (Speak/Write toggle on the /meet screen), so the old separate
+             "Add notes" quick-note card is gone. Mic + pen advertise both. ── */}
       {online && (
-        <>
-          <Link
-            href={`/meet?personId=${person.id}`}
-            className="flex items-center justify-center gap-2 w-full h-12 rounded-[10px_2px_10px_2px] text-white transition-opacity active:opacity-80"
-            style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
-          >
-            <Mic className="w-4 h-4" />
-            <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
-              <T k="person.log_meeting_with" /> {person.name.split(" ")[0].toUpperCase()}
-            </span>
-          </Link>
-
-          <div
-            className="p-4 rounded-[10px_2px_10px_2px]"
-            style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
-          >
-            <AddNotesInput personId={person.id} personName={person.name} />
-          </div>
-        </>
+        <Link
+          href={`/meet?personId=${person.id}`}
+          className="flex items-center justify-center gap-2 w-full h-12 rounded-[10px_2px_10px_2px] text-white transition-opacity active:opacity-80"
+          style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
+        >
+          <Mic className="w-4 h-4" />
+          <PenLine className="w-4 h-4" />
+          <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
+            <T k="person.log_meeting_with" /> {person.name.split(" ")[0].toUpperCase()}
+          </span>
+        </Link>
       )}
 
       {/* ── Edit attributes + notes (works offline) ───────────────────────── */}
