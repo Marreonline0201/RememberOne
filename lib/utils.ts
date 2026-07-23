@@ -281,11 +281,14 @@ const RELATION_KOREAN_PLACEHOLDERS: Record<string, string[]> = {
 export function isRelationPlaceholder(name: string, relation: string): boolean {
   const n = name.trim().toLowerCase();
   const r = relation.trim().toLowerCase();
-  // Matches "son", "Son", "son 1", "son 2", etc.
-  if (n === r || /^[a-z]+ \d+$/.test(n) && n.startsWith(r + " ")) return true;
+  // Matches "son", "Son", "son 1", "son 2" — and the unspaced "son2" the model
+  // sometimes emits despite the prompt asking for a space.
+  const numbered = (stem: string) =>
+    new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\d+$`).test(n);
+  if (n === r || numbered(r)) return true;
   // Korean equivalents: "딸", "아들", "딸 1", etc.
   const korean = RELATION_KOREAN_PLACEHOLDERS[r] ?? [];
-  return korean.some((k) => n === k || n === k + " 1" || /^\S+ \d+$/.test(n) && n.startsWith(k + " "));
+  return korean.some((k) => n === k || numbered(k));
 }
 
 // Check if a calendar event title or description mentions a person's name
