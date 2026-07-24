@@ -120,6 +120,46 @@ export function AccountPage() {
 
   const connected = connectedOverride ?? cachedConnection;
 
+  // Guest (anonymous) accounts: detect from the live session so the page can
+  // offer the "keep your data" upgrade instead of showing an empty email.
+  const [isGuest, setIsGuest] = useState(false);
+  const [upgradeEmail, setUpgradeEmail] = useState("");
+  const [upgradePassword, setUpgradePassword] = useState("");
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeSent, setUpgradeSent] = useState(false);
+  useEffect(() => {
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => setIsGuest(Boolean(data.user?.is_anonymous)))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleUpgradeAccount(e: React.FormEvent) {
+    e.preventDefault();
+    setUpgrading(true);
+    try {
+      // Linking an email identity converts the anonymous user in place —
+      // same user id, all data kept. The password applies immediately; the
+      // account becomes permanent once the emailed confirmation is tapped.
+      const { error } = await supabase.auth.updateUser({
+        email: upgradeEmail.trim(),
+        password: upgradePassword,
+      });
+      if (error) throw error;
+      setUpgradeSent(true);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: ko ? "계정을 만들 수 없어요" : "Couldn't create the account",
+        description:
+          err instanceof Error ? err.message : ko ? "다시 시도해 주세요." : "Please try again.",
+      });
+    } finally {
+      setUpgrading(false);
+    }
+  }
+
   useEffect(() => {
     import("@capacitor/core")
       .then(({ Capacitor }) => setIsNative(Capacitor.isNativePlatform()))
@@ -261,14 +301,85 @@ export function AccountPage() {
               className="text-[22px] leading-tight text-black truncate"
               style={{ fontFamily: "'Hammersmith One', sans-serif" }}
             >
-              {displayName}
+              {isGuest ? (ko ? "게스트" : "Guest") : displayName}
             </p>
             <p className="text-[13px] mt-0.5 truncate" style={{ color: "#5e7983" }}>
-              {profile?.email}
+              {isGuest
+                ? ko
+                  ? "계정 없이 사용 중"
+                  : "Using without an account"
+                : profile?.email}
             </p>
           </div>
         </div>
       </div>
+
+      {/* Guest upgrade — convert the anonymous account in place (same user id,
+          all data kept). Without this, the data lives only behind the session
+          token on this device. */}
+      {isGuest && (
+        <div
+          className="p-4 rounded-[10px_2px_10px_2px]"
+          style={{ backgroundColor: "#f5f0ff", border: "1px solid #dccaff" }}
+        >
+          <p
+            className="text-[13px] uppercase mb-1 flex items-center gap-2"
+            style={{ color: "#665b7b", fontFamily: "'Hammersmith One', sans-serif" }}
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            {ko ? "데이터 지키기" : "Keep your data"}
+          </p>
+          {upgradeSent ? (
+            <p className="text-[13px] leading-relaxed" style={{ color: "#284e72" }}>
+              {ko
+                ? "확인 메일을 보냈어요. 메일의 링크를 누르면 계정이 만들어지고 모든 데이터가 유지돼요."
+                : "Confirmation email sent. Tap the link in it and your account is ready — all your data stays."}
+            </p>
+          ) : (
+            <>
+              <p className="text-[12px] leading-relaxed mb-3" style={{ color: "#5e7983" }}>
+                {ko
+                  ? "지금은 이 기기에서만 접근할 수 있어요. 이메일을 추가하면 어디서든 로그인할 수 있고 데이터가 안전하게 보관돼요."
+                  : "Right now your notes are reachable only from this device. Add an email to sign in anywhere and keep them safe."}
+              </p>
+              <form onSubmit={handleUpgradeAccount} className="space-y-2">
+                <input
+                  type="email"
+                  required
+                  value={upgradeEmail}
+                  onChange={(e) => setUpgradeEmail(e.target.value)}
+                  placeholder={ko ? "이메일" : "Email"}
+                  autoComplete="email"
+                  className="w-full h-11 px-3 text-base rounded-[8px_2px_8px_2px] border bg-white outline-none"
+                  style={{ borderColor: "#dccaff", color: "#284e72" }}
+                />
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={upgradePassword}
+                  onChange={(e) => setUpgradePassword(e.target.value)}
+                  placeholder={ko ? "비밀번호 (8자 이상)" : "Password (8+ characters)"}
+                  autoComplete="new-password"
+                  className="w-full h-11 px-3 text-base rounded-[8px_2px_8px_2px] border bg-white outline-none"
+                  style={{ borderColor: "#dccaff", color: "#284e72" }}
+                />
+                <button
+                  type="submit"
+                  disabled={upgrading || !online}
+                  className="w-full h-11 rounded-[10px_2px_10px_2px] text-white flex items-center justify-center gap-2 transition-opacity active:opacity-80 disabled:opacity-60"
+                  style={{ background: "linear-gradient(to right, #284e72, #482d7c)" }}
+                >
+                  {upgrading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span style={{ fontFamily: "'Hammersmith One', sans-serif" }}>
+                    {ko ? "계정 만들기" : "CREATE MY ACCOUNT"}
+                  </span>
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Settings — Language */}
       <div

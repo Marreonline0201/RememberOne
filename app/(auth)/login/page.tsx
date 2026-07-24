@@ -79,6 +79,18 @@ async function signInWithAppleNative(
   });
   if (error) throw error;
 
+  // Hand the one-shot authorization code to the server so it can exchange it
+  // for an Apple refresh token — required to revoke the Sign in with Apple
+  // grant when the user later deletes their account (App Store 5.1.1(v)).
+  // Fire-and-forget: login must never fail over this.
+  if (response.authorizationCode) {
+    void fetch("/api/apple/store-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authorizationCode: response.authorizationCode }),
+    }).catch(() => {});
+  }
+
   // Apple sends the user's name ONLY on the very first authorization, and it
   // arrives beside the token (never inside it), so the DB signup trigger
   // can't see it — store it now, in auth metadata and on the profile row
@@ -118,6 +130,30 @@ export default function LoginPage() {
   // Which OAuth provider is mid-flight (null = none). One state for both
   // buttons — only one OAuth redirect can be in progress at a time.
   const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
+  const [guestLoading, setGuestLoading] = useState(false);
+
+  // Guest mode — App Store 5.1.1(v): the app must be usable without
+  // registering. Creates an anonymous Supabase user (random ID, no personal
+  // info collected); convertible to a full account later in Settings, keeping
+  // the same user id and all data.
+  async function handleGuestSignIn() {
+    setGuestLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
+      await persistNativeSession(data.session);
+      // HARD navigation on sign-in, same as every other auth path.
+      window.location.assign("/");
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Couldn't start a guest session",
+        description:
+          err instanceof Error ? err.message : "Please try again in a moment.",
+      });
+      setGuestLoading(false);
+    }
+  }
 
   useEffect(() => {
     // On native only: try to rehydrate a session from Capacitor Preferences.
@@ -558,6 +594,24 @@ export default function LoginPage() {
                 </>
               )}
             </p>
+
+            {/* Guest entry — usable without any registration (5.1.1(v)) */}
+            <div className="pt-3 border-t space-y-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full h-11 text-muted-foreground"
+                onClick={handleGuestSignIn}
+                disabled={guestLoading || loading || oauthLoading !== null}
+              >
+                {guestLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                Continue without an account
+              </Button>
+              <p className="text-[11px] text-center text-muted-foreground">
+                Try everything now — add an email later in Settings to keep your
+                data safe.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>

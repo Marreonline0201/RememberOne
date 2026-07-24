@@ -60,6 +60,45 @@ export async function POST() {
   }
 
   const service = createServiceClient();
+
+  // Best-effort Apple grant revocation (native Sign in with Apple users whose
+  // refresh token we captured at sign-in). Apple's account-deletion guidance
+  // asks for this; failures never block the deletion.
+  try {
+    const clientSecret = process.env.APPLE_NATIVE_CLIENT_SECRET;
+    if (clientSecret) {
+      const { data: appleRow } = await service
+        .from("apple_tokens")
+        .select("refresh_token")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const appleToken = appleRow
+        ? (() => {
+            try {
+              return decryptTokenOptional(appleRow.refresh_token);
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+      if (appleToken) {
+        await fetch("https://appleid.apple.com/auth/revoke", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: "com.rememberone.app",
+            client_secret: clientSecret,
+            token: appleToken,
+            token_type_hint: "refresh_token",
+          }),
+          signal: AbortSignal.timeout(5000),
+        }).catch(() => {});
+      }
+    }
+  } catch {
+    // best-effort only
+  }
+
   const { error } = await service.auth.admin.deleteUser(user.id);
   if (error) {
     console.error("[account/delete] deleteUser failed:", error.message);

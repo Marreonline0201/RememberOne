@@ -21,6 +21,7 @@ export default async function PrivacyPolicy() {
     { titleKey: "privacy.collect.title", bodyKey: "privacy.collect.body" },
     { titleKey: "privacy.use.title",     bodyKey: "privacy.use.body" },
     { titleKey: "privacy.ai.title",      bodyKey: "privacy.ai.body" },
+    { titleKey: "privacy.transfer.title",bodyKey: "privacy.transfer.body" },
     { titleKey: "privacy.calendar.title",bodyKey: "privacy.calendar.body" },
     { titleKey: "privacy.storage.title", bodyKey: "privacy.storage.body" },
     { titleKey: "privacy.deletion.title",bodyKey: "privacy.deletion.body" },
