@@ -596,8 +596,8 @@ const keys: Translations = {
   "privacy.updated": { en: "Last updated: March 2026", ko: "최종 업데이트: 2026년 3월" },
   "privacy.collect.title": { en: "What we collect", ko: "수집 정보" },
   "privacy.collect.body": {
-    en: "We collect your email address and name when you create an account. We also store the information you choose to log about people you meet — including their names, attributes, family members, and meeting notes.",
-    ko: "계정 생성 시 이메일 주소와 이름을 수집합니다. 또한 만나는 사람들에 대해 기록하는 정보(이름, 속성, 가족 구성원, 미팅 메모)도 저장합니다.",
+    en: "We collect your email address and name when you create an account. Guest mode collects no personal information about you at all — a random identifier is created instead, and you can add an email later to keep your data. We also store the information you choose to log about people you meet — including their names, attributes, family members, and meeting notes. You are responsible for recording information about other people lawfully and respectfully.",
+    ko: "계정 생성 시 이메일 주소와 이름을 수집합니다. 게스트 모드에서는 개인정보를 전혀 수집하지 않으며 무작위 식별자만 생성됩니다(나중에 이메일을 추가해 데이터를 보존할 수 있어요). 또한 만나는 사람들에 대해 기록하는 정보(이름, 속성, 가족 구성원, 미팅 메모)도 저장합니다. 다른 사람에 대한 정보는 적법하고 상대를 존중하는 방식으로 기록할 책임이 이용자에게 있습니다.",
   },
   "privacy.use.title": { en: "How we use your data", ko: "데이터 사용 방법" },
   "privacy.use.body": {
@@ -606,8 +606,13 @@ const keys: Translations = {
   },
   "privacy.ai.title": { en: "AI processing", ko: "AI 처리" },
   "privacy.ai.body": {
-    en: "When you log a meeting, the text you provide is sent to a third-party AI service (Google Gemini) to extract structured information. We ask for your explicit permission before sending anything, and this text is processed only to provide the service — it is not used to train AI models. You can withdraw your consent at any time in Account settings, which turns the AI features off.",
-    ko: "미팅을 기록할 때 입력한 텍스트는 구조화된 정보 추출을 위해 제3자 AI 서비스(Google Gemini)로 전송됩니다. 전송 전에 명시적 동의를 요청하며, 이 텍스트는 서비스 제공 목적으로만 처리되고 AI 모델 훈련에는 사용되지 않습니다. 계정 설정에서 언제든지 동의를 철회할 수 있으며, 철회 시 AI 기능이 꺼집니다.",
+    en: "When you log a meeting, the text or audio you provide is sent to a third-party AI service (Google Gemini) to extract structured information. We ask for your explicit permission before sending anything, and this content is processed only to provide the service — it is not used to train AI models. You can withdraw your consent at any time in Account settings, which turns the AI features off. You can also disconnect Google Calendar at any time in Account settings, which revokes and deletes the stored calendar tokens.",
+    ko: "미팅을 기록할 때 입력한 텍스트나 음성은 구조화된 정보 추출을 위해 제3자 AI 서비스(Google Gemini)로 전송됩니다. 전송 전에 명시적 동의를 요청하며, 이 내용은 서비스 제공 목적으로만 처리되고 AI 모델 훈련에는 사용되지 않습니다. 계정 설정에서 언제든지 동의를 철회할 수 있으며, 철회 시 AI 기능이 꺼집니다. Google 캘린더 연결도 계정 설정에서 언제든지 해제할 수 있으며, 해제 시 저장된 캘린더 토큰이 취소·삭제됩니다.",
+  },
+  "privacy.transfer.title": { en: "International data transfer", ko: "국외 이전 (개인정보 국외 이전 고지)" },
+  "privacy.transfer.body": {
+    en: "For AI processing, the note text or voice recording you submit (which may include information about people you describe) is transmitted to Google LLC (1600 Amphitheatre Parkway, Mountain View, CA, USA; googlekrsupport@google.com) for the purpose of extracting structured details. The content is processed for this purpose only, is not used to train Google's models, and is not retained by Google beyond processing. Transmission occurs when you use the AI features, after your explicit consent.",
+    ko: "AI 처리를 위해 이용자가 제출한 메모 텍스트 또는 음성 녹음(기록 대상 인물에 대한 정보 포함 가능)은 구조화된 정보 추출 목적으로 미국의 Google LLC(1600 Amphitheatre Parkway, Mountain View, CA, USA; googlekrsupport@google.com)에 전송됩니다. 해당 내용은 이 목적에만 처리되며 Google 모델 학습에 사용되지 않고 처리 후 보관되지 않습니다. 이전 시점은 이용자가 명시적으로 동의한 뒤 AI 기능을 사용하는 때입니다.",
   },
   "privacy.calendar.title": { en: "Calendar access", ko: "캘린더 접근" },
   "privacy.calendar.body": {
@@ -616,8 +621,8 @@ const keys: Translations = {
   },
   "privacy.storage.title": { en: "Data storage", ko: "데이터 보관" },
   "privacy.storage.body": {
-    en: "Your data is stored securely using Supabase. We use industry-standard encryption in transit and at rest.",
-    ko: "데이터는 Supabase를 통해 안전하게 저장됩니다. 전송 중 및 저장 시 업계 표준 암호화를 사용합니다.",
+    en: "Your data is stored securely using Supabase and served via Vercel; AI processing uses Google's Gemini API under its paid-tier terms. We use industry-standard encryption in transit and at rest, and each of these providers is contractually bound to protect your data to an equivalent standard. Data is retained until you delete it or your account. Guest accounts that have not been used for 60 days are automatically deleted along with all their data.",
+    ko: "데이터는 Supabase를 통해 안전하게 저장되고 Vercel을 통해 제공되며, AI 처리는 Google Gemini API(유료 등급 약관)를 사용합니다. 전송 중 및 저장 시 업계 표준 암호화를 사용하고, 각 제공업체는 동등한 수준의 데이터 보호를 계약상 준수합니다. 데이터는 이용자가 삭제하거나 계정을 삭제할 때까지 보관됩니다. 60일간 사용되지 않은 게스트 계정은 모든 데이터와 함께 자동 삭제됩니다.",
   },
   "privacy.deletion.title": { en: "Account deletion", ko: "계정 삭제" },
   "privacy.deletion.body": {

@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { transcribeAudio } from "@/lib/gemini";
-import { consumeAIRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { consumeAIRateLimit, rateLimitHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { hasAiConsent, consentRequiredResponse } from "@/lib/ai-consent";
 
 // 5 MB ≈ 8 minutes of Opus-encoded WebM. Comfortably above the 60-second cap
@@ -45,12 +45,12 @@ export async function POST(request: Request) {
     if (!hasAiConsent(user)) return consentRequiredResponse();
 
     // 2. Rate limit (shares the same per-user sliding window as /api/ai/extract)
-    const rl = await consumeAIRateLimit(supabase);
+    const rl = await consumeAIRateLimit(supabase, user);
     if (!rl.allowed) {
       return NextResponse.json(
         {
           data: null,
-          error: "Too many requests. Please wait a moment and try again.",
+          error: rateLimitMessage(rl),
         },
         { status: 429, headers: rateLimitHeaders(rl) }
       );

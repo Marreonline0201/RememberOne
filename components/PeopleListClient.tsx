@@ -23,6 +23,7 @@ import type { PersonFull } from "@/types/app";
 import { ensureOfflineOwner } from "@/lib/offline-owner";
 import { warmPaths } from "@/lib/offline-warm";
 import { WarmingProgress } from "@/components/WarmingProgress";
+import { GuestNudge } from "@/components/GuestNudge";
 import { registerNotificationTapHandler } from "@/lib/meeting-notifications";
 
 interface Props {
@@ -137,6 +138,7 @@ export function PeopleListClient({
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
       <WarmingProgress />
+      {people.length > 0 && <GuestNudge />}
       {hasCalendarConnection && people.length > 0 && <UpcomingMeetingAlert />}
 
       {people.length === 0 ? (
